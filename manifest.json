@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "UoB Smart Assistant",
+  "version": "1.0.0",
+  "description": "Unified crawler and AI digest for Canvas, Outlook, and University Societies.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://canvas.bham.ac.uk/*",
+    "https://myuob.bham.ac.uk/*",
+    "https://www.guildofstudents.com/*",
+    "https://outlook.office.com/*",
+    "https://outlook.cloud.microsoft/*",
+    "http://localhost:1234/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://canvas.bham.ac.uk/*"],
+      "js": ["content-scripts/canvas.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://myuob.bham.ac.uk/*",
+        "https://www.guildofstudents.com/*"
+      ],
+      "js": ["content-scripts/myuob.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://outlook.office.com/*",
+        "https://outlook.cloud.microsoft/*"
+      ],
+      "js": ["content-scripts/outlook.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "UoB Smart Assistant"
+  }
+}

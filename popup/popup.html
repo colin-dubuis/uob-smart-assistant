@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UoB Smart Assistant</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">🎓</div>
+        <div>
+          <h1>UoB Assistant</h1>
+          <span class="subtitle">Unified Crawler & AI Digest</span>
+        </div>
+      </div>
+      <div id="statusBadge" class="status-badge ready">Ready</div>
+    </header>
+
+    <!-- Primary Action Bar -->
+    <div class="action-bar">
+      <button id="btnSync" class="btn-primary">
+        <span class="btn-icon">⚡</span> Sync & Analyze All
+      </button>
+      <div class="secondary-actions">
+        <button id="btnDemo" class="btn-secondary" title="Load sample student data for demonstration">
+          🎯 Demo Data
+        </button>
+        <button id="btnExport" class="btn-secondary" title="Download raw JSON data">
+          💾 Export JSON
+        </button>
+      </div>
+    </div>
+
+    <!-- Status feedback banner -->
+    <div id="statusBar" class="status-message hidden"></div>
+
+    <!-- Navigation Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="ai-briefing">✨ AI Briefing</button>
+      <button class="tab-btn" data-tab="all-items">📋 All Items (<span id="itemCount">0</span>)</button>
+    </div>
+
+    <!-- Content Sections -->
+    <main class="tab-content">
+      <!-- Tab 1: AI Briefing -->
+      <section id="tab-ai-briefing" class="tab-pane active">
+        <!-- Engine Indicator -->
+        <div id="engineTag" class="engine-tag">Checking AI engine...</div>
+
+        <!-- Academic Crunch Overview -->
+        <div class="digest-card crunch-card">
+          <div class="card-title">
+            <span class="icon">📊</span>
+            <h3>Academic Crunch Overview</h3>
+          </div>
+          <p id="crunchSummary" class="card-body">
+            Click <strong>Sync & Analyze</strong> or <strong>Demo Data</strong> to extract upcoming deadlines and notifications.
+          </p>
+        </div>
+
+        <!-- Top Priorities -->
+        <div class="digest-card">
+          <div class="card-title">
+            <span class="icon">🔥</span>
+            <h3>Top 3 Urgent Priorities</h3>
+          </div>
+          <div id="topPrioritiesList" class="priorities-list">
+            <div class="empty-state">No priorities analyzed yet.</div>
+          </div>
+        </div>
+
+        <!-- Society & Campus Pulse -->
+        <div class="digest-card society-card">
+          <div class="card-title">
+            <span class="icon">🎉</span>
+            <h3>Campus & Society Pulse</h3>
+          </div>
+          <p id="societyHighlights" class="card-body">
+            Stay balanced! Campus society highlights will appear here after sync.
+          </p>
+        </div>
+      </section>
+
+      <!-- Tab 2: All Items -->
+      <section id="tab-all-items" class="tab-pane">
+        <div class="filter-bar">
+          <button class="filter-pill active" data-filter="all">All</button>
+          <button class="filter-pill" data-filter="canvas">Canvas</button>
+          <button class="filter-pill" data-filter="outlook">Outlook</button>
+          <button class="filter-pill" data-filter="society">Societies</button>
+        </div>
+        <div id="itemsContainer" class="items-list">
+          <div class="empty-state">No scraped data stored yet.</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <span>Auto-crawls Canvas, Outlook & Guild</span>
+      <span id="lastUpdated" class="last-updated">Never</span>
+    </footer>
+  </div>
+
+  <script src="intelligence.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
