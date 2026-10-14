@@ -346,11 +346,32 @@ body:not(.dark-mode) .btn-primary {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .btn-secondary:hover {
   background: var(--surface-card);
   border-color: var(--text-muted);
+}
+
+.btn-danger {
+  color: #e11d48;
+  border-color: rgba(225, 29, 72, 0.4);
+}
+
+.btn-danger:hover {
+  background: rgba(225, 29, 72, 0.1);
+  border-color: #e11d48;
+}
+
+body.dark-mode .btn-danger {
+  color: #fb7185;
+  border-color: rgba(251, 113, 133, 0.4);
+}
+
+body.dark-mode .btn-danger:hover {
+  background: rgba(225, 29, 72, 0.2);
 }
 
 /* Status message */

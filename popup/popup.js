@@ -18,6 +18,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const btnSync = document.getElementById("btnSync");
   const btnDemo = document.getElementById("btnDemo");
   const btnExport = document.getElementById("btnExport");
+  const btnClear = document.getElementById("btnClear");
   const themeToggle = document.getElementById("themeToggle");
   const themeIcon = document.getElementById("themeIcon");
   const settingsBtn = document.getElementById("settingsBtn");
@@ -354,7 +355,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentItems = items;
         renderItems();
 
-        showStatus("Analyzing with Bonsai-27B AI model...");
+        showStatus("Analyzing with Gemma 4 (12B) AI model...");
         const digest = await window.generateSmartDigest(items, currentKeywords);
         renderDigest(digest);
 
@@ -365,7 +366,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         lastUpdated.innerText = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        showStatus(`Done! Analyzed ${items.length} items across student portals.`);
+        showStatus(`Done! Analyzed ${items.length} items with ${digest.model || "Gemma 4"}.`);
         setTimeout(hideStatus, 4000);
 
         statusBadge.className = "status-badge ready";
@@ -381,7 +382,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ── Handle Demo Mode (14 Multi-Portal Items) ──
   btnDemo.addEventListener("click", async () => {
-    showStatus("Loading 14 multi-portal Birmingham items & analyzing with Bonsai-27B...");
+    showStatus("Loading 14 multi-portal items & analyzing with Gemma 4 (12B)...");
     currentItems = window.SAMPLE_UOB_DATA;
     renderItems();
 
@@ -395,8 +396,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     lastUpdated.innerText = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    showStatus(`Loaded 14 items from Canvas, Outlook, MyUoB, Guild & Library!`);
+    showStatus(`Loaded 14 items and analyzed with ${digest.model || "Gemma 4"}!`);
     setTimeout(hideStatus, 3000);
+  });
+
+  // ── Handle Clear All Data (Fresh Crawl) ──
+  btnClear.addEventListener("click", async () => {
+    if (confirm("Delete all stored crawled items and start completely fresh?")) {
+      await chrome.storage.local.remove(["scrapedItems", "lastDigest", "lastCrawlTime"]);
+      currentItems = [];
+      itemCount.innerText = "0";
+      countAll.innerText = "0";
+      lastUpdated.innerText = "Never";
+      engineTag.innerText = "Cleared";
+      crunchSummary.innerText = "All data cleared. Click 'Sync & Analyze All Portals' to crawl fresh items from your open tabs.";
+      topPrioritiesList.innerHTML = `<div class="empty-state">No priorities yet. Start a fresh crawl!</div>`;
+      societyHighlights.innerText = "Social events will appear here after fresh crawl.";
+      renderItems();
+      showStatus("All stored data cleared! Ready for fresh crawl.");
+      setTimeout(hideStatus, 3000);
+    }
   });
 
   // ── Handle Export JSON ──

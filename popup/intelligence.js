@@ -1,10 +1,11 @@
-const LM_STUDIO_URL = "http://localhost:1234/v1/chat/completions";
-const MODEL_NAME = "prism-ml/bonsai-27b";
+const LM_STUDIO_URL = "http://127.0.0.1:1234/v1/chat/completions";
+const MODEL_NAME = "google/gemma-4-12b-qat";
+const FALLBACK_MODEL = "prism-ml/bonsai-27b";
 
 const SYSTEM_PROMPT = `You are an elite academic AI assistant for University of Birmingham students.
 Analyze the provided student items from Canvas, Outlook, MyUoB, Societies, Library, and Careers.
 Output ONLY valid JSON containing:
-1) "crunch_summary": A concise 2-sentence overview of the busiest days and workload pressure across academic and campus life.
+1) "crunch_summary": A concise 2-sentence overview of the busiest days and workload pressure.
 2) "top_priorities": An array of the top 3 most critical items needing immediate attention. Each must have { "id", "title", "reason", "source" }.
 3) "society_highlights": A fun 1-sentence recommendation for upcoming social events to maintain work-life balance.`;
 
@@ -20,19 +21,18 @@ function calculateUrgencyScore(item, customKeywords = []) {
     const diffHours = (due - now) / (1000 * 60 * 60);
 
     if (diffHours < 0) {
-      score += 10; // Overdue / today
+      score += 10;
     } else if (diffHours <= 24) {
-      score += 100; // Immediate 24h
+      score += 100;
     } else if (diffHours <= 72) {
-      score += 70; // Next 3 days
+      score += 70;
     } else if (diffHours <= 168) {
-      score += 40; // This week
+      score += 40;
     } else {
       score += 15;
     }
   }
 
-  // Base urgency keywords + custom user search keywords
   const urgentKeywords = [
     "urgent", "deadline", "due", "submission", "exam", "test", "quiz",
     "coursework", "mandatory", "required", "action required", "important",
@@ -48,7 +48,7 @@ function calculateUrgencyScore(item, customKeywords = []) {
   }
 
   if (item.source === "canvas") score += 25;
-  if (item.source === "library" && item.dueDate) score += 30; // Fines on overdue books!
+  if (item.source === "library" && item.dueDate) score += 30;
   if (item.source === "outlook" && (title.includes("grade") || title.includes("meeting") || item.isUrgent)) score += 25;
 
   return score;
@@ -58,8 +58,8 @@ function cleanJsonResponse(rawText) {
   if (!rawText) throw new Error("Empty response from AI");
   let text = String(rawText).trim();
 
-  // Strip markdown code fences if present
-  text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  // Strip markdown code fences if present (e.g. ```json ... ```)
+  text = text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
 
   // Find first { and last }
   const firstBrace = text.indexOf("{");
@@ -75,7 +75,7 @@ function generateAlgorithmicDigest(items, customKeywords = []) {
   if (!items || items.length === 0) {
     return {
       engine: "Built-in Intelligence",
-      model: "Heuristic Engine",
+      model: "Heuristic Fallback",
       crunch_summary: "No pending deadlines or notifications found across your portals. Schedule is clear!",
       top_priorities: [],
       society_highlights: "Explore student societies on the Guild website to get involved!"
@@ -124,7 +124,7 @@ function generateAlgorithmicDigest(items, customKeywords = []) {
 
   return {
     engine: "Built-in Intelligence",
-    model: "Heuristic Engine",
+    model: "Heuristic Fallback",
     crunch_summary: crunch,
     top_priorities: topPriorities,
     society_highlights: societyHighlight
@@ -132,36 +132,53 @@ function generateAlgorithmicDigest(items, customKeywords = []) {
 }
 
 async function analyzeWithLMStudio(items) {
-  const topItems = items.slice(0, 10).map(({ id, title, source, course, dueDate, snippet }) => ({
-    id, title, source, course, dueDate, snippet
+  // Keep prompt compact: top 8 items with essential fields only to keep token processing fast
+  const topItems = items.slice(0, 8).map(({ id, title, source, course, dueDate, snippet }) => ({
+    id,
+    title,
+    source,
+    course: course || "",
+    dueDate: dueDate || null,
+    snippet: (snippet || "").slice(0, 100)
   }));
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000);
+  // 120 seconds timeout so reasoning models (thinking tokens) NEVER disconnect early
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-  const response = await fetch(LM_STUDIO_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: MODEL_NAME,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Student portal items: ${JSON.stringify(topItems)}. Return the JSON digest.` }
-      ],
-      temperature: 0.2
-    }),
-    signal: controller.signal
-  });
+  let response;
+  try {
+    response = await fetch(LM_STUDIO_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: MODEL_NAME,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: `Student portal items: ${JSON.stringify(topItems)}. Return the JSON digest.` }
+        ],
+        temperature: 0.2
+      }),
+      signal: controller.signal
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
 
   clearTimeout(timeoutId);
 
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`HTTP ${response.status}: ${errorText}`);
+  }
+
   const result = await response.json();
   const rawContent = result?.choices?.[0]?.message?.content;
   const parsed = cleanJsonResponse(rawContent);
 
   return {
-    engine: "Local AI (LM Studio)",
+    engine: "Local AI (Gemma 4)",
     model: result.model || MODEL_NAME,
     ...parsed
   };
@@ -171,14 +188,13 @@ async function generateSmartDigest(items, customKeywords = []) {
   try {
     return await analyzeWithLMStudio(items);
   } catch (err) {
-    console.info("[Intelligence] Local model error or timeout, falling back to heuristics:", err.message);
+    console.warn("[Intelligence] Gemma-4 error or timeout, falling back to heuristics:", err.message);
     return generateAlgorithmicDigest(items, customKeywords);
   }
 }
 
-// ── Rich Multi-Portal Dataset for Birmingham Students (14 Items) ──
+// ── Sample Birmingham Student Dataset (for Demo & Testing) ──
 const SAMPLE_UOB_DATA = [
-  // ── Canvas LMS Deadlines ──
   {
     id: "canvas-1",
     title: "Software Engineering Project - Sprint 2 Milestone Submission",
@@ -210,18 +226,6 @@ const SAMPLE_UOB_DATA = [
     type: "quiz"
   },
   {
-    id: "canvas-4",
-    title: "Database Systems: Relational Algebra Exercise",
-    source: "canvas",
-    course: "CS204: Database Systems",
-    dueDate: new Date(Date.now() + 120 * 60 * 60 * 1000).toISOString(),
-    snippet: "Complete problem set 4 on SQL queries and normalization forms.",
-    url: "https://canvas.bham.ac.uk/courses/CS204/assignments/ps4",
-    type: "assignment"
-  },
-
-  // ── Outlook Web Emails ──
-  {
     id: "outlook-1",
     title: "URGENT: Lecture Hall Change for CS302 Tomorrow Morning",
     source: "outlook",
@@ -235,17 +239,6 @@ const SAMPLE_UOB_DATA = [
   },
   {
     id: "outlook-2",
-    title: "Grading Feedback Released: Systems Programming Lab 2",
-    source: "outlook",
-    dueDate: null,
-    date: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    snippet: "Your lab marks and inline code comments have been published to Canvas. Overall average: 74%.",
-    sender: "Teaching Team (Dr. Ada Lovelace)",
-    url: "https://outlook.cloud.microsoft",
-    matchedKeywords: ["feedback", "lab", "assessment"]
-  },
-  {
-    id: "outlook-3",
     title: "Final Reminder: Register for Autumn Term Exam Arrangements",
     source: "outlook",
     dueDate: new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString(),
@@ -256,8 +249,6 @@ const SAMPLE_UOB_DATA = [
     isUrgent: true,
     matchedKeywords: ["exam", "reminder", "deadline"]
   },
-
-  // ── MyUoB Student Portal & Timetable ──
   {
     id: "myuob-1",
     title: "CS302 Advanced Software Design: Workshop & Code Review",
@@ -268,18 +259,6 @@ const SAMPLE_UOB_DATA = [
     url: "https://myuob.bham.ac.uk/dashboard/student-home",
     type: "event"
   },
-  {
-    id: "myuob-2",
-    title: "Campus Notice: Old Library Square Construction Access",
-    source: "myuob",
-    course: "University Notice",
-    dueDate: null,
-    snippet: "Pedestrian detour in place between Aston Webb and the Guild of Students until Monday.",
-    url: "https://myuob.bham.ac.uk/dashboard/student-home",
-    type: "announcement"
-  },
-
-  // ── Guild Societies & Campus Life ──
   {
     id: "society-1",
     title: "UoB Hackathon 2026: Team Pitch & Domino's Pizza Night",
@@ -292,28 +271,6 @@ const SAMPLE_UOB_DATA = [
     matchedKeywords: ["pizza", "hackathon", "social"]
   },
   {
-    id: "society-2",
-    title: "AI Society: Deep Learning Agents Guest Lecture & Pub Social",
-    source: "society",
-    course: "Artificial Intelligence Society",
-    dueDate: new Date(Date.now() + 68 * 60 * 60 * 1000).toISOString(),
-    snippet: "Tech talk on LLM tool-calling in Biosciences Tower Rm 101, followed by social drinks at Joes Bar. (Starts 19:00 - 21:30)",
-    url: "https://www.guildofstudents.com/events/ai-talk",
-    type: "event"
-  },
-  {
-    id: "society-3",
-    title: "Guild of Students: Autumn Term Board Games Evening",
-    source: "society",
-    course: "Tabletop Gaming Society",
-    dueDate: new Date(Date.now() + 94 * 60 * 60 * 1000).toISOString(),
-    snippet: "Amos Room (Guild 1st Floor). 150+ games, snacks provided, beginner friendly.",
-    url: "https://www.guildofstudents.com/events/games",
-    type: "event"
-  },
-
-  // ── Library Services (FindIt@Bham) ──
-  {
     id: "library-1",
     title: "Main Library Loan Due: 'Designing Data-Intensive Applications'",
     source: "library",
@@ -322,19 +279,6 @@ const SAMPLE_UOB_DATA = [
     snippet: "Book barcode #839219. Return to Main Library ground-floor drop box or renew online before midnight to avoid fines.",
     url: "https://findit.bham.ac.uk",
     type: "loan"
-  },
-
-  // ── Careers Network & Worklink ──
-  {
-    id: "library-2",
-    title: "Careers Connect: Summer Tech Internship Application Deadline",
-    source: "library",
-    course: "Careers Network UoB",
-    dueDate: new Date(Date.now() + 110 * 60 * 60 * 1000).toISOString(),
-    snippet: "Birmingham Technology Graduate Scheme & Summer 2027 Software Internships. Applications close Friday.",
-    url: "https://careersconnect.bham.ac.uk",
-    type: "careers",
-    matchedKeywords: ["careers", "deadline"]
   }
 ];
 

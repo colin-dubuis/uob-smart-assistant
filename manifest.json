@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "UoB Smart Assistant",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Unified student portal crawler and AI digest for Canvas, Outlook, MyUoB, Guild Societies, Library & Careers.",
   "permissions": [
     "storage",
@@ -19,6 +19,8 @@
     "https://careersconnect.bham.ac.uk/*",
     "https://outlook.office.com/*",
     "https://outlook.cloud.microsoft/*",
+    "https://outlook.office365.com/*",
+    "http://127.0.0.1:1234/*",
     "http://localhost:1234/*"
   ],
   "background": {
@@ -42,7 +44,8 @@
     {
       "matches": [
         "https://outlook.office.com/*",
-        "https://outlook.cloud.microsoft/*"
+        "https://outlook.cloud.microsoft/*",
+        "https://outlook.office365.com/*"
       ],
       "js": ["content-scripts/outlook.js"],
       "run_at": "document_idle"

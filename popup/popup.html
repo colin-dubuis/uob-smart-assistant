@@ -62,10 +62,13 @@
       </button>
       <div class="secondary-actions">
         <button id="btnDemo" class="btn-secondary" title="Load sample student data for demonstration">
-          🎯 Demo Data (14 Items)
+          🎯 Demo Data
         </button>
         <button id="btnExport" class="btn-secondary" title="Download raw JSON data">
           💾 Export JSON
+        </button>
+        <button id="btnClear" class="btn-secondary btn-danger" title="Delete all stored crawl data to start completely fresh">
+          🗑️ Clear Data
         </button>
       </div>
     </div>
@@ -86,7 +89,7 @@
         <!-- Engine Indicator & Model Badge -->
         <div class="engine-bar">
           <div id="engineTag" class="engine-tag">Checking AI engine...</div>
-          <span class="model-badge">prism-ml/bonsai-27b</span>
+          <span class="model-badge">google/gemma-4-12b-qat</span>
         </div>
 
         <!-- Academic Crunch Overview -->
@@ -96,7 +99,7 @@
             <h3>Academic Crunch Overview</h3>
           </div>
           <p id="crunchSummary" class="card-body">
-            Click <strong>Sync & Analyze</strong> or <strong>Demo Data</strong> to extract upcoming deadlines and notifications.
+            Click <strong>Sync & Analyze</strong> to crawl your open portals, or <strong>Demo Data</strong> to preview.
           </p>
         </div>
 
@@ -144,14 +147,14 @@
 
         <!-- Scrollable Long Items Container -->
         <div id="itemsContainer" class="items-list">
-          <div class="empty-state">No scraped portal data stored yet.</div>
+          <div class="empty-state">No scraped portal data stored yet. Click "Sync" to crawl.</div>
         </div>
       </section>
     </main>
 
     <!-- Footer -->
     <footer class="app-footer">
-      <span>Crawls Canvas, Outlook, MyUoB, Guild & Library</span>
+      <span>Auto-crawls Canvas, Outlook, MyUoB, Guild & Library</span>
       <span id="lastUpdated" class="last-updated">Never</span>
     </footer>
   </div>
