@@ -7,9 +7,10 @@ const CRAWL_TARGETS = [
     funcName: "crawlCanvasData"
   },
   {
-    name: "Outlook Web",
+    name: "Outlook Web (50 Emails)",
     source: "outlook",
-    url: "https://outlook.cloud.microsoft",
+    url: "https://outlook.office.com/mail/inbox",
+    fallbackUrl: "https://outlook.cloud.microsoft/mail/",
     script: "content-scripts/outlook.js",
     funcName: "crawlOutlookData"
   },
@@ -40,51 +41,95 @@ function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+async function findExistingTab(target) {
+  try {
+    const host = new URL(target.url).hostname;
+    // Check main and alternate domains for Outlook
+    let patterns = [`*://${host}/*`];
+    if (target.source === "outlook") {
+      patterns = [
+        "*://outlook.office.com/*",
+        "*://outlook.cloud.microsoft/*",
+        "*://outlook.office365.com/*",
+        "*://outlook.live.com/*"
+      ];
+    }
+
+    const tabs = await chrome.tabs.query({ url: patterns });
+    return tabs && tabs.length > 0 ? tabs[0] : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function crawlTab(target) {
   let tab = null;
+  let isCreatedByUs = false;
+
   try {
-    tab = await chrome.tabs.create({ url: target.url, active: false });
+    // 1. Check if user already has this portal open in an existing tab
+    tab = await findExistingTab(target);
 
-    await new Promise((resolve) => {
-      const timeout = setTimeout(resolve, 8000); // 8s max wait per tab
-      function listener(tabId, changeInfo) {
-        if (tabId === tab.id && changeInfo.status === "complete") {
-          clearTimeout(timeout);
-          chrome.tabs.onUpdated.removeListener(listener);
-          resolve();
+    if (tab && tab.id) {
+      console.log(`[Crawler] Using existing open tab for ${target.name} (Tab ID: ${tab.id})`);
+    } else {
+      // 2. Otherwise open in background
+      isCreatedByUs = true;
+      tab = await chrome.tabs.create({ url: target.url, active: false });
+
+      await new Promise((resolve) => {
+        const timeout = setTimeout(resolve, 10000); // 10s wait
+        function listener(tabId, changeInfo) {
+          if (tabId === tab.id && changeInfo.status === "complete") {
+            clearTimeout(timeout);
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
         }
-      }
-      chrome.tabs.onUpdated.addListener(listener);
-    });
+        chrome.tabs.onUpdated.addListener(listener);
+      });
 
-    await wait(1500);
+      // Extra hydration delay for dynamic web apps
+      const hydrationTime = target.source === "outlook" ? 4000 : 1500;
+      await wait(hydrationTime);
+    }
 
+    // 3. Inject content script
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       files: [target.script]
     });
 
+    // 4. Execute the async extractor function and AWAIT the promise!
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: (fnName, sourceName) => {
+      func: async (fnName, sourceName) => {
         if (typeof window[fnName] === "function") {
-          const res = window[fnName]();
-          if (Array.isArray(res)) {
-            return res.map(item => ({ ...item, source: item.source || sourceName }));
+          try {
+            const res = await window[fnName]();
+            if (Array.isArray(res)) {
+              return res.map(item => ({ ...item, source: item.source || sourceName }));
+            }
+            return res || [];
+          } catch (err) {
+            console.error(`[Scraper Function Error in ${fnName}]:`, err);
+            return [];
           }
-          return res;
         }
         return [];
       },
       args: [target.funcName, target.source]
     });
 
-    return results?.[0]?.result || [];
+    const items = results?.[0]?.result || [];
+    console.log(`[Crawler] ${target.name} returned ${items.length} items`);
+    return items;
   } catch (err) {
     console.warn(`[Crawler] Failed crawling ${target.name}:`, err.message);
     return [];
   } finally {
-    if (tab && tab.id) {
+    // Only close the tab if WE opened it in the background
+    if (isCreatedByUs && tab && tab.id) {
       try {
         await chrome.tabs.remove(tab.id);
       } catch (e) {}
@@ -119,7 +164,7 @@ async function orchestrateCrawl() {
 function deduplicateItems(items) {
   const seen = new Set();
   return items.filter(item => {
-    const key = `${item.source}:${item.title}:${item.dueDate || ""}`;
+    const key = `${item.source}:${item.title}:${item.dueDate || item.date || ""}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
