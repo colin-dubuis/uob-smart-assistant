@@ -1,22 +1,36 @@
 const CRAWL_TARGETS = [
   {
-    name: "Canvas",
+    name: "Canvas LMS",
     source: "canvas",
     url: "https://canvas.bham.ac.uk",
     script: "content-scripts/canvas.js",
     funcName: "crawlCanvasData"
   },
   {
-    name: "Outlook",
+    name: "Outlook Web",
     source: "outlook",
     url: "https://outlook.cloud.microsoft",
     script: "content-scripts/outlook.js",
     funcName: "crawlOutlookData"
   },
   {
-    name: "Societies",
+    name: "MyUoB Portal",
+    source: "myuob",
+    url: "https://myuob.bham.ac.uk/dashboard/student-home",
+    script: "content-scripts/myuob.js",
+    funcName: "crawlSocietyData"
+  },
+  {
+    name: "Guild Societies",
     source: "society",
     url: "https://www.guildofstudents.com/events",
+    script: "content-scripts/myuob.js",
+    funcName: "crawlSocietyData"
+  },
+  {
+    name: "Library Services",
+    source: "library",
+    url: "https://intranet.birmingham.ac.uk/student/libraries/index.aspx",
     script: "content-scripts/myuob.js",
     funcName: "crawlSocietyData"
   }
@@ -29,12 +43,10 @@ function wait(ms) {
 async function crawlTab(target) {
   let tab = null;
   try {
-    // Open in background
     tab = await chrome.tabs.create({ url: target.url, active: false });
 
-    // Wait for page load or timeout
     await new Promise((resolve) => {
-      const timeout = setTimeout(resolve, 8000); // 8 sec max wait
+      const timeout = setTimeout(resolve, 8000); // 8s max wait per tab
       function listener(tabId, changeInfo) {
         if (tabId === tab.id && changeInfo.status === "complete") {
           clearTimeout(timeout);
@@ -45,10 +57,8 @@ async function crawlTab(target) {
       chrome.tabs.onUpdated.addListener(listener);
     });
 
-    // Small delay for client-side hydration
     await wait(1500);
 
-    // Inject content script if not already loaded, then execute function
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       files: [target.script]
@@ -56,26 +66,28 @@ async function crawlTab(target) {
 
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: (fnName) => {
+      func: (fnName, sourceName) => {
         if (typeof window[fnName] === "function") {
-          return window[fnName]();
+          const res = window[fnName]();
+          if (Array.isArray(res)) {
+            return res.map(item => ({ ...item, source: item.source || sourceName }));
+          }
+          return res;
         }
         return [];
       },
-      args: [target.funcName]
+      args: [target.funcName, target.source]
     });
 
     return results?.[0]?.result || [];
   } catch (err) {
-    console.warn(`[Crawler] Failed crawling ${target.name}:`, err);
+    console.warn(`[Crawler] Failed crawling ${target.name}:`, err.message);
     return [];
   } finally {
     if (tab && tab.id) {
       try {
         await chrome.tabs.remove(tab.id);
-      } catch (e) {
-        // Tab might already be closed
-      }
+      } catch (e) {}
     }
   }
 }
@@ -90,10 +102,11 @@ async function orchestrateCrawl() {
     }).catch(() => {});
 
     const items = await crawlTab(target);
-    allItems.push(...items);
+    if (Array.isArray(items)) {
+      allItems.push(...items);
+    }
   }
 
-  // Deduplicate and save to storage
   const finalItems = deduplicateItems(allItems);
   await chrome.storage.local.set({
     scrapedItems: finalItems,
@@ -106,7 +119,7 @@ async function orchestrateCrawl() {
 function deduplicateItems(items) {
   const seen = new Set();
   return items.filter(item => {
-    const key = `${item.source}:${item.title}`;
+    const key = `${item.source}:${item.title}:${item.dueDate || ""}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -118,6 +131,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     orchestrateCrawl()
       .then(items => sendResponse({ success: true, items }))
       .catch(err => sendResponse({ success: false, error: err.message }));
-    return true; // Keep sendResponse open for async
+    return true;
   }
 });

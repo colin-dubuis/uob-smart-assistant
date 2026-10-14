@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "UoB Smart Assistant",
-  "version": "1.0.0",
-  "description": "Unified crawler and AI digest for Canvas, Outlook, and University Societies.",
+  "version": "1.1.0",
+  "description": "Unified student portal crawler and AI digest for Canvas, Outlook, MyUoB, Guild Societies, Library & Careers.",
   "permissions": [
     "storage",
     "tabs",
@@ -10,10 +10,13 @@
     "activeTab"
   ],
   "host_permissions": [
+    "https://*.bham.ac.uk/*",
     "https://canvas.bham.ac.uk/*",
     "https://myuob.bham.ac.uk/*",
+    "https://intranet.birmingham.ac.uk/*",
     "https://api.myday.cloud/*",
     "https://www.guildofstudents.com/*",
+    "https://careersconnect.bham.ac.uk/*",
     "https://outlook.office.com/*",
     "https://outlook.cloud.microsoft/*",
     "http://localhost:1234/*"
@@ -30,7 +33,8 @@
     {
       "matches": [
         "https://myuob.bham.ac.uk/*",
-        "https://www.guildofstudents.com/*"
+        "https://www.guildofstudents.com/*",
+        "https://intranet.birmingham.ac.uk/*"
       ],
       "js": ["content-scripts/myuob.js"],
       "run_at": "document_idle"

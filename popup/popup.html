@@ -14,25 +14,55 @@
         <div class="brand-icon">🎓</div>
         <div>
           <h1>UoB Assistant</h1>
-          <span class="subtitle">Unified Crawler & AI Digest</span>
+          <span class="subtitle">Multi-Portal Crawler & AI Digest</span>
         </div>
       </div>
       <div class="header-controls">
         <button id="themeToggle" class="btn-icon-toggle" title="Toggle Black / Dark Mode">
           <span id="themeIcon">🌙</span>
         </button>
+        <button id="settingsBtn" class="btn-icon-toggle" title="Keyword Settings & Help">
+          <span>⚙️</span>
+        </button>
         <div id="statusBadge" class="status-badge ready">Ready</div>
       </div>
     </header>
 
+    <!-- Settings & Keyword Help Panel (Collapsible) -->
+    <section id="settingsPanel" class="settings-drawer hidden">
+      <div class="settings-header">
+        <h3>⚙️ Keyword Filters & Priority Help</h3>
+        <button id="closeSettingsBtn" class="btn-close" title="Close settings">×</button>
+      </div>
+
+      <div class="keyword-help-box">
+        💡 <strong>How it works:</strong> Emails, announcements, and tasks matching any of these keywords are automatically flagged, boosted in urgency, and analyzed by the AI model.
+      </div>
+
+      <div class="preset-row">
+        <span class="preset-label">Quick Presets:</span>
+        <button class="preset-pill" data-preset="deadlines">+ Deadlines</button>
+        <button class="preset-pill" data-preset="exams">+ Exams</button>
+        <button class="preset-pill" data-preset="socials">+ Free Food & Events</button>
+        <button class="preset-pill" data-preset="careers">+ Careers</button>
+      </div>
+
+      <div id="keywordChipsContainer" class="keyword-chips-list"></div>
+
+      <div class="keyword-add-row">
+        <input type="text" id="newKeywordInput" placeholder="Add custom keyword (e.g. hackathon, dissertation)..." autocomplete="off">
+        <button id="addKeywordBtn" class="btn-add">Add</button>
+      </div>
+    </section>
+
     <!-- Primary Action Bar -->
     <div class="action-bar">
       <button id="btnSync" class="btn-primary">
-        <span class="btn-icon">⚡</span> Sync & Analyze All
+        <span class="btn-icon">⚡</span> Sync & Analyze All Portals
       </button>
       <div class="secondary-actions">
         <button id="btnDemo" class="btn-secondary" title="Load sample student data for demonstration">
-          🎯 Demo Data
+          🎯 Demo Data (14 Items)
         </button>
         <button id="btnExport" class="btn-secondary" title="Download raw JSON data">
           💾 Export JSON
@@ -46,7 +76,7 @@
     <!-- Navigation Tabs -->
     <div class="tabs">
       <button class="tab-btn active" data-tab="ai-briefing">✨ AI Briefing</button>
-      <button class="tab-btn" data-tab="all-items">📋 All Items (<span id="itemCount">0</span>)</button>
+      <button class="tab-btn" data-tab="all-items">📋 Student Portal Items (<span id="itemCount">0</span>)</button>
     </div>
 
     <!-- Content Sections -->
@@ -93,32 +123,35 @@
         </div>
       </section>
 
-      <!-- Tab 2: All Items -->
+      <!-- Tab 2: All Items (Expanded List with Multi-Portal Filters) -->
       <section id="tab-all-items" class="tab-pane">
         <!-- Keyword Search Input -->
         <div class="search-box">
           <span class="search-icon">🔍</span>
-          <input type="text" id="keywordSearch" placeholder="Search keywords (e.g. exam, AI, meeting, CS)..." autocomplete="off">
+          <input type="text" id="keywordSearch" placeholder="Filter items by keyword, module code, sender..." autocomplete="off">
           <button id="clearSearch" class="btn-clear hidden" title="Clear search">×</button>
         </div>
 
-        <!-- Source filter pills -->
+        <!-- Multi-Source filter pills -->
         <div class="filter-bar">
-          <button class="filter-pill active" data-filter="all">All</button>
+          <button class="filter-pill active" data-filter="all">All (<span id="countAll">0</span>)</button>
           <button class="filter-pill" data-filter="canvas">Canvas</button>
           <button class="filter-pill" data-filter="outlook">Outlook</button>
+          <button class="filter-pill" data-filter="myuob">MyUoB</button>
           <button class="filter-pill" data-filter="society">Societies</button>
+          <button class="filter-pill" data-filter="library">Library/Careers</button>
         </div>
 
+        <!-- Scrollable Long Items Container -->
         <div id="itemsContainer" class="items-list">
-          <div class="empty-state">No scraped data stored yet.</div>
+          <div class="empty-state">No scraped portal data stored yet.</div>
         </div>
       </section>
     </main>
 
     <!-- Footer -->
     <footer class="app-footer">
-      <span>Auto-crawls Canvas, Outlook & Guild</span>
+      <span>Crawls Canvas, Outlook, MyUoB, Guild & Library</span>
       <span id="lastUpdated" class="last-updated">Never</span>
     </footer>
   </div>

@@ -1,5 +1,18 @@
 document.addEventListener("DOMContentLoaded", async () => {
-  // Elements
+  const DEFAULT_KEYWORDS = [
+    "deadline", "due", "submission", "assignment", "exam",
+    "compulsory", "urgent", "important", "cancelled", "rescheduled",
+    "reminder", "assessment", "coursework", "pizza"
+  ];
+
+  const PRESETS = {
+    deadlines: ["deadline", "submission", "due", "coursework", "milestone"],
+    exams: ["exam", "quiz", "test", "assessment", "midterm"],
+    socials: ["pizza", "hackathon", "social", "free food", "meetup", "games"],
+    careers: ["careers", "internship", "job", "worklink", "graduate", "fair"]
+  };
+
+  // ── Elements ──
   const statusBadge = document.getElementById("statusBadge");
   const statusBar = document.getElementById("statusBar");
   const btnSync = document.getElementById("btnSync");
@@ -7,11 +20,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   const btnExport = document.getElementById("btnExport");
   const themeToggle = document.getElementById("themeToggle");
   const themeIcon = document.getElementById("themeIcon");
+  const settingsBtn = document.getElementById("settingsBtn");
+  const settingsPanel = document.getElementById("settingsPanel");
+  const closeSettingsBtn = document.getElementById("closeSettingsBtn");
+  const keywordChipsContainer = document.getElementById("keywordChipsContainer");
+  const newKeywordInput = document.getElementById("newKeywordInput");
+  const addKeywordBtn = document.getElementById("addKeywordBtn");
+  const presetButtons = document.querySelectorAll(".preset-pill");
+
   const keywordSearch = document.getElementById("keywordSearch");
   const clearSearch = document.getElementById("clearSearch");
   const tabButtons = document.querySelectorAll(".tab-btn");
   const filterPills = document.querySelectorAll(".filter-pill");
   const itemCount = document.getElementById("itemCount");
+  const countAll = document.getElementById("countAll");
+
   const engineTag = document.getElementById("engineTag");
   const crunchSummary = document.getElementById("crunchSummary");
   const topPrioritiesList = document.getElementById("topPrioritiesList");
@@ -22,10 +45,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   let currentItems = [];
   let activeFilter = "all";
   let searchQuery = "";
+  let currentKeywords = [...DEFAULT_KEYWORDS];
 
   // ── Black / Dark Mode Theme Setup ──
-  const storedTheme = await chrome.storage.local.get(["darkMode"]);
-  if (storedTheme.darkMode) {
+  const storedData = await chrome.storage.local.get(["darkMode", "keywords", "scrapedItems", "lastDigest", "lastCrawlTime"]);
+
+  if (storedData.darkMode) {
     document.body.classList.add("dark-mode");
     themeIcon.innerText = "☀️";
   } else {
@@ -36,6 +61,73 @@ document.addEventListener("DOMContentLoaded", async () => {
     const isDark = document.body.classList.toggle("dark-mode");
     themeIcon.innerText = isDark ? "☀️" : "🌙";
     await chrome.storage.local.set({ darkMode: isDark });
+  });
+
+  // ── Keyword Settings & Help Drawer ──
+  if (Array.isArray(storedData.keywords) && storedData.keywords.length > 0) {
+    currentKeywords = storedData.keywords;
+  }
+  renderKeywordChips();
+
+  settingsBtn.addEventListener("click", () => {
+    settingsPanel.classList.toggle("hidden");
+  });
+
+  closeSettingsBtn.addEventListener("click", () => {
+    settingsPanel.classList.add("hidden");
+  });
+
+  function renderKeywordChips() {
+    keywordChipsContainer.innerHTML = "";
+    currentKeywords.forEach((kw, idx) => {
+      const chip = document.createElement("span");
+      chip.className = "kw-chip";
+      chip.innerHTML = `${escapeHtml(kw)} <button aria-label="Remove ${escapeHtml(kw)}" title="Remove keyword">×</button>`;
+      chip.querySelector("button").addEventListener("click", async () => {
+        currentKeywords.splice(idx, 1);
+        renderKeywordChips();
+        await chrome.storage.local.set({ keywords: currentKeywords });
+        renderItems();
+      });
+      keywordChipsContainer.appendChild(chip);
+    });
+  }
+
+  async function addCustomKeyword(word) {
+    const cleanWord = (word || "").trim().toLowerCase();
+    if (cleanWord && !currentKeywords.includes(cleanWord)) {
+      currentKeywords.push(cleanWord);
+      renderKeywordChips();
+      await chrome.storage.local.set({ keywords: currentKeywords });
+      renderItems();
+    }
+  }
+
+  addKeywordBtn.addEventListener("click", () => {
+    addCustomKeyword(newKeywordInput.value);
+    newKeywordInput.value = "";
+  });
+
+  newKeywordInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      addCustomKeyword(newKeywordInput.value);
+      newKeywordInput.value = "";
+    }
+  });
+
+  presetButtons.forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const presetName = btn.dataset.preset;
+      const words = PRESETS[presetName] || [];
+      words.forEach(w => {
+        if (!currentKeywords.includes(w)) currentKeywords.push(w);
+      });
+      renderKeywordChips();
+      await chrome.storage.local.set({ keywords: currentKeywords });
+      renderItems();
+      showStatus(`Added ${presetName} keyword preset!`);
+      setTimeout(hideStatus, 2000);
+    });
   });
 
   // ── Keyword Search ──
@@ -56,7 +148,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderItems();
   });
 
-  // Tab switching
+  // ── Tab switching ──
   tabButtons.forEach(btn => {
     btn.addEventListener("click", () => {
       tabButtons.forEach(b => b.classList.remove("active"));
@@ -67,7 +159,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
-  // Filter pills
+  // ── Source Filter pills ──
   filterPills.forEach(pill => {
     pill.addEventListener("click", () => {
       filterPills.forEach(p => p.classList.remove("active"));
@@ -77,27 +169,43 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
-  // Load existing data from storage
-  await loadStoredData();
+  // ── Load Initial Stored State ──
+  if (storedData.scrapedItems && storedData.scrapedItems.length > 0) {
+    currentItems = storedData.scrapedItems;
+    itemCount.innerText = currentItems.length;
+    countAll.innerText = currentItems.length;
+    renderItems();
+  }
+  if (storedData.lastDigest) {
+    renderDigest(storedData.lastDigest);
+  }
+  if (storedData.lastCrawlTime) {
+    const d = new Date(storedData.lastCrawlTime);
+    lastUpdated.innerText = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
 
-  async function loadStoredData() {
-    try {
-      const data = await chrome.storage.local.get(["scrapedItems", "lastDigest", "lastCrawlTime"]);
-      if (data.scrapedItems && data.scrapedItems.length > 0) {
-        currentItems = data.scrapedItems;
-        itemCount.innerText = currentItems.length;
-        renderItems();
-      }
-      if (data.lastDigest) {
-        renderDigest(data.lastDigest);
-      }
-      if (data.lastCrawlTime) {
-        const d = new Date(data.lastCrawlTime);
-        lastUpdated.innerText = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      }
-    } catch (e) {
-      console.warn("Storage load error:", e);
+  // ── Joule's Due Date Formatter ──
+  function formatDue(dateStr) {
+    if (!dateStr) return null;
+    const due = new Date(dateStr);
+    if (isNaN(due.getTime())) return { label: dateStr, cls: "due-upcoming" };
+
+    const now = Date.now();
+    const diff = due.getTime() - now;
+    const absDiff = Math.abs(diff);
+    const hours = Math.floor(absDiff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+
+    if (diff < 0) {
+      return { label: `Overdue ${days > 0 ? days + "d ago" : hours + "h ago"}`, cls: "due-overdue" };
     }
+    if (diff <= 48 * 60 * 60 * 1000) {
+      return { label: `Due in ${hours}h`, cls: "due-soon" };
+    }
+    return {
+      label: `Due ${due.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`,
+      cls: "due-upcoming"
+    };
   }
 
   function renderDigest(digest) {
@@ -126,15 +234,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     societyHighlights.innerText = digest.society_highlights || "Check out campus society events!";
   }
 
+  // ── Render Items (Longer List with Rich Portal Cards) ──
   function renderItems() {
     itemsContainer.innerHTML = "";
 
     const filtered = currentItems.filter(item => {
-      // 1. Source filter
-      if (activeFilter !== "all" && item.source !== activeFilter) {
-        return false;
+      // Source filter
+      if (activeFilter !== "all") {
+        if (activeFilter === "library") {
+          if (item.source !== "library" && item.source !== "careers") return false;
+        } else if (item.source !== activeFilter) {
+          return false;
+        }
       }
-      // 2. Keyword search filter
+
+      // Keyword search
       if (searchQuery) {
         const title = (item.title || "").toLowerCase();
         const snippet = (item.snippet || "").toLowerCase();
@@ -148,10 +262,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       return true;
     });
 
+    itemCount.innerText = currentItems.length;
+    countAll.innerText = currentItems.length;
+
     if (filtered.length === 0) {
       const msg = searchQuery
-        ? `No items found matching keyword "${escapeHtml(searchQuery)}"`
-        : `No items for source: ${activeFilter}`;
+        ? `No portal items found matching "${escapeHtml(searchQuery)}"`
+        : `No items found for category: ${activeFilter}`;
       itemsContainer.innerHTML = `<div class="empty-state">${msg}</div>`;
       return;
     }
@@ -159,15 +276,48 @@ document.addEventListener("DOMContentLoaded", async () => {
     filtered.forEach(item => {
       const card = document.createElement("div");
       card.className = "item-card";
-      const dueStr = item.dueDate ? `Due: ${new Date(item.dueDate).toLocaleString()}` : (item.date ? `Date: ${item.date}` : "");
+      card.title = item.url ? "Click to open portal item" : "";
+
+      if (item.url) {
+        card.addEventListener("click", () => {
+          chrome.tabs.create({ url: item.url });
+        });
+      }
+
+      // Urgency Pill
+      let dueHtml = "";
+      if (item.dueDate) {
+        const dueInfo = formatDue(item.dueDate);
+        if (dueInfo) {
+          dueHtml = `<span class="due-tag ${dueInfo.cls}">${dueInfo.label}</span>`;
+        }
+      }
+
+      // Course or Sender Meta
+      const metaText = item.course || item.sender || "";
+
+      // Matched Keywords chips
+      const fullTextLower = `${item.title} ${item.snippet}`.toLowerCase();
+      const matched = currentKeywords.filter(k => fullTextLower.includes(k.toLowerCase()));
+      let kwChipsHtml = "";
+      if (matched.length > 0) {
+        const pills = matched.slice(0, 3).map(m => `<span class="kw-pill">#${escapeHtml(m)}</span>`).join("");
+        kwChipsHtml = `<div class="keywords-row">${pills}</div>`;
+      }
+
       card.innerHTML = `
         <div class="item-header">
           <span class="item-title">${escapeHtml(item.title)}</span>
-          <span class="item-badge badge-${item.source}">${item.source}</span>
+          <div class="item-badges-group">
+            ${dueHtml}
+            <span class="item-badge badge-${item.source}">${item.source}</span>
+          </div>
         </div>
-        <div class="item-snippet">${escapeHtml(item.snippet || "No description")}</div>
-        ${dueStr ? `<div class="item-meta">🕒 ${escapeHtml(dueStr)}</div>` : ""}
+        ${metaText ? `<div class="item-meta-row"><span class="meta-course">${escapeHtml(metaText)}</span></div>` : ""}
+        <div class="item-snippet">${escapeHtml(item.snippet || "No description provided.")}</div>
+        ${kwChipsHtml}
       `;
+
       itemsContainer.appendChild(card);
     });
   }
@@ -183,17 +333,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     statusBar.classList.add("hidden");
   }
 
-  // Handle Sync & Crawl
+  // ── Handle Sync & Crawl Across All Portals ──
   btnSync.addEventListener("click", async () => {
     btnSync.disabled = true;
     statusBadge.className = "status-badge crawling";
     statusBadge.innerText = "Syncing...";
-    showStatus("Opening tabs and crawling Canvas, Outlook, and Societies...");
+    showStatus("Opening tabs and crawling Canvas, Outlook, MyUoB, Guild & Library...");
 
     try {
       chrome.runtime.sendMessage({ action: "start_crawl" }, async (response) => {
         if (!response || !response.success) {
-          showStatus("Crawl finished with warnings or empty data. Tip: Use 'Demo Data' for testing.", true);
+          showStatus("Crawl complete with warnings. Tip: Use 'Demo Data' for offline presentation.", true);
           statusBadge.className = "status-badge ready";
           statusBadge.innerText = "Ready";
           btnSync.disabled = false;
@@ -202,12 +352,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const items = response.items || [];
         currentItems = items;
-        itemCount.innerText = currentItems.length;
         renderItems();
 
         showStatus("Analyzing with Bonsai-27B AI model...");
-        const customKeywords = searchQuery ? [searchQuery] : [];
-        const digest = await window.generateSmartDigest(items, customKeywords);
+        const digest = await window.generateSmartDigest(items, currentKeywords);
         renderDigest(digest);
 
         await chrome.storage.local.set({
@@ -217,7 +365,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         lastUpdated.innerText = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        showStatus(`Done! Analyzed ${items.length} items with ${digest.model || "Bonsai-27B"}.`);
+        showStatus(`Done! Analyzed ${items.length} items across student portals.`);
         setTimeout(hideStatus, 4000);
 
         statusBadge.className = "status-badge ready";
@@ -231,15 +379,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // Handle Demo Mode (1-click presentation data)
+  // ── Handle Demo Mode (14 Multi-Portal Items) ──
   btnDemo.addEventListener("click", async () => {
-    showStatus("Loading UoB sample data & analyzing with Bonsai-27B...");
+    showStatus("Loading 14 multi-portal Birmingham items & analyzing with Bonsai-27B...");
     currentItems = window.SAMPLE_UOB_DATA;
-    itemCount.innerText = currentItems.length;
     renderItems();
 
-    const customKeywords = searchQuery ? [searchQuery] : [];
-    const digest = await window.generateSmartDigest(currentItems, customKeywords);
+    const digest = await window.generateSmartDigest(currentItems, currentKeywords);
     renderDigest(digest);
 
     await chrome.storage.local.set({
@@ -249,11 +395,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     lastUpdated.innerText = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    showStatus(`Sample data analyzed with ${digest.model || "Bonsai-27B"}!`);
+    showStatus(`Loaded 14 items from Canvas, Outlook, MyUoB, Guild & Library!`);
     setTimeout(hideStatus, 3000);
   });
 
-  // Handle Export JSON
+  // ── Handle Export JSON ──
   btnExport.addEventListener("click", () => {
     if (currentItems.length === 0) {
       alert("No data available to export. Click Sync or Demo first!");
@@ -262,13 +408,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentItems, null, 2));
     const downloadAnchor = document.createElement("a");
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "uob-student-data.json");
+    downloadAnchor.setAttribute("download", "uob-student-portal-data.json");
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
   });
 
-  // Listen for background progress messages
   chrome.runtime.onMessage.addListener((request) => {
     if (request.action === "crawl_status") {
       showStatus(request.message);
