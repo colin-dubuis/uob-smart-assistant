@@ -17,7 +17,12 @@
           <span class="subtitle">Unified Crawler & AI Digest</span>
         </div>
       </div>
-      <div id="statusBadge" class="status-badge ready">Ready</div>
+      <div class="header-controls">
+        <button id="themeToggle" class="btn-icon-toggle" title="Toggle Black / Dark Mode">
+          <span id="themeIcon">🌙</span>
+        </button>
+        <div id="statusBadge" class="status-badge ready">Ready</div>
+      </div>
     </header>
 
     <!-- Primary Action Bar -->
@@ -48,8 +53,11 @@
     <main class="tab-content">
       <!-- Tab 1: AI Briefing -->
       <section id="tab-ai-briefing" class="tab-pane active">
-        <!-- Engine Indicator -->
-        <div id="engineTag" class="engine-tag">Checking AI engine...</div>
+        <!-- Engine Indicator & Model Badge -->
+        <div class="engine-bar">
+          <div id="engineTag" class="engine-tag">Checking AI engine...</div>
+          <span class="model-badge">prism-ml/bonsai-27b</span>
+        </div>
 
         <!-- Academic Crunch Overview -->
         <div class="digest-card crunch-card">
@@ -87,12 +95,21 @@
 
       <!-- Tab 2: All Items -->
       <section id="tab-all-items" class="tab-pane">
+        <!-- Keyword Search Input -->
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="keywordSearch" placeholder="Search keywords (e.g. exam, AI, meeting, CS)..." autocomplete="off">
+          <button id="clearSearch" class="btn-clear hidden" title="Clear search">×</button>
+        </div>
+
+        <!-- Source filter pills -->
         <div class="filter-bar">
           <button class="filter-pill active" data-filter="all">All</button>
           <button class="filter-pill" data-filter="canvas">Canvas</button>
           <button class="filter-pill" data-filter="outlook">Outlook</button>
           <button class="filter-pill" data-filter="society">Societies</button>
         </div>
+
         <div id="itemsContainer" class="items-list">
           <div class="empty-state">No scraped data stored yet.</div>
         </div>

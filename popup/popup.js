@@ -5,6 +5,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const btnSync = document.getElementById("btnSync");
   const btnDemo = document.getElementById("btnDemo");
   const btnExport = document.getElementById("btnExport");
+  const themeToggle = document.getElementById("themeToggle");
+  const themeIcon = document.getElementById("themeIcon");
+  const keywordSearch = document.getElementById("keywordSearch");
+  const clearSearch = document.getElementById("clearSearch");
   const tabButtons = document.querySelectorAll(".tab-btn");
   const filterPills = document.querySelectorAll(".filter-pill");
   const itemCount = document.getElementById("itemCount");
@@ -17,6 +21,40 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   let currentItems = [];
   let activeFilter = "all";
+  let searchQuery = "";
+
+  // ── Black / Dark Mode Theme Setup ──
+  const storedTheme = await chrome.storage.local.get(["darkMode"]);
+  if (storedTheme.darkMode) {
+    document.body.classList.add("dark-mode");
+    themeIcon.innerText = "☀️";
+  } else {
+    themeIcon.innerText = "🌙";
+  }
+
+  themeToggle.addEventListener("click", async () => {
+    const isDark = document.body.classList.toggle("dark-mode");
+    themeIcon.innerText = isDark ? "☀️" : "🌙";
+    await chrome.storage.local.set({ darkMode: isDark });
+  });
+
+  // ── Keyword Search ──
+  keywordSearch.addEventListener("input", (e) => {
+    searchQuery = (e.target.value || "").trim().toLowerCase();
+    if (searchQuery) {
+      clearSearch.classList.remove("hidden");
+    } else {
+      clearSearch.classList.add("hidden");
+    }
+    renderItems();
+  });
+
+  clearSearch.addEventListener("click", () => {
+    keywordSearch.value = "";
+    searchQuery = "";
+    clearSearch.classList.add("hidden");
+    renderItems();
+  });
 
   // Tab switching
   tabButtons.forEach(btn => {
@@ -90,13 +128,31 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function renderItems() {
     itemsContainer.innerHTML = "";
+
     const filtered = currentItems.filter(item => {
-      if (activeFilter === "all") return true;
-      return item.source === activeFilter;
+      // 1. Source filter
+      if (activeFilter !== "all" && item.source !== activeFilter) {
+        return false;
+      }
+      // 2. Keyword search filter
+      if (searchQuery) {
+        const title = (item.title || "").toLowerCase();
+        const snippet = (item.snippet || "").toLowerCase();
+        const sender = (item.sender || "").toLowerCase();
+        const course = (item.course || "").toLowerCase();
+        return title.includes(searchQuery) ||
+               snippet.includes(searchQuery) ||
+               sender.includes(searchQuery) ||
+               course.includes(searchQuery);
+      }
+      return true;
     });
 
     if (filtered.length === 0) {
-      itemsContainer.innerHTML = `<div class="empty-state">No items for source: ${activeFilter}</div>`;
+      const msg = searchQuery
+        ? `No items found matching keyword "${escapeHtml(searchQuery)}"`
+        : `No items for source: ${activeFilter}`;
+      itemsContainer.innerHTML = `<div class="empty-state">${msg}</div>`;
       return;
     }
 
@@ -119,8 +175,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   function showStatus(text, isError = false) {
     statusBar.classList.remove("hidden");
     statusBar.innerText = text;
-    statusBar.style.background = isError ? "#fee2e2" : "#fef9c3";
-    statusBar.style.color = isError ? "#991b1b" : "#713f12";
+    statusBar.style.background = isError ? "rgba(239, 68, 68, 0.2)" : "rgba(234, 179, 8, 0.2)";
+    statusBar.style.color = isError ? "#f87171" : "#fef08a";
   }
 
   function hideStatus() {
@@ -149,8 +205,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         itemCount.innerText = currentItems.length;
         renderItems();
 
-        showStatus("Analyzing with AI / Priority Engine...");
-        const digest = await window.generateSmartDigest(items);
+        showStatus("Analyzing with Bonsai-27B AI model...");
+        const customKeywords = searchQuery ? [searchQuery] : [];
+        const digest = await window.generateSmartDigest(items, customKeywords);
         renderDigest(digest);
 
         await chrome.storage.local.set({
@@ -160,7 +217,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         lastUpdated.innerText = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        showStatus(`Done! Analyzed ${items.length} items successfully.`);
+        showStatus(`Done! Analyzed ${items.length} items with ${digest.model || "Bonsai-27B"}.`);
         setTimeout(hideStatus, 4000);
 
         statusBadge.className = "status-badge ready";
@@ -176,12 +233,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Handle Demo Mode (1-click presentation data)
   btnDemo.addEventListener("click", async () => {
-    showStatus("Loading UoB sample data & generating AI digest...");
+    showStatus("Loading UoB sample data & analyzing with Bonsai-27B...");
     currentItems = window.SAMPLE_UOB_DATA;
     itemCount.innerText = currentItems.length;
     renderItems();
 
-    const digest = await window.generateSmartDigest(currentItems);
+    const customKeywords = searchQuery ? [searchQuery] : [];
+    const digest = await window.generateSmartDigest(currentItems, customKeywords);
     renderDigest(digest);
 
     await chrome.storage.local.set({
@@ -191,7 +249,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     lastUpdated.innerText = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    showStatus("Sample UoB student data loaded and analyzed!");
+    showStatus(`Sample data analyzed with ${digest.model || "Bonsai-27B"}!`);
     setTimeout(hideStatus, 3000);
   });
 

@@ -1,13 +1,14 @@
 const LM_STUDIO_URL = "http://localhost:1234/v1/chat/completions";
+const MODEL_NAME = "prism-ml/bonsai-27b";
 
 const SYSTEM_PROMPT = `You are an elite academic AI assistant for University of Birmingham students.
 Analyze the provided student items (Canvas deadlines, Outlook emails, Guild society events).
-Output a JSON response containing:
+Output ONLY valid JSON containing:
 1) "crunch_summary": A concise 2-sentence overview of the busiest days and workload pressure.
 2) "top_priorities": An array of the top 3 most critical items needing immediate attention. Each must have { "id", "title", "reason", "source" }.
 3) "society_highlights": A fun 1-sentence recommendation for upcoming social events to maintain work-life balance.`;
 
-function calculateUrgencyScore(item) {
+function calculateUrgencyScore(item, customKeywords = []) {
   let score = 0;
   const now = new Date().getTime();
   const title = (item.title || "").toLowerCase();
@@ -31,44 +32,63 @@ function calculateUrgencyScore(item) {
     }
   }
 
-  // High priority keywords
+  // Base urgency keywords + custom user search keywords
   const urgentKeywords = [
     "urgent", "deadline", "due", "submission", "exam", "test", "quiz",
-    "coursework", "mandatory", "required", "action required", "important"
+    "coursework", "mandatory", "required", "action required", "important",
+    ...customKeywords.map(k => k.toLowerCase())
   ];
+
   for (const kw of urgentKeywords) {
+    if (!kw) continue;
     if (title.includes(kw) || snippet.includes(kw)) {
-      score += 35;
+      score += 40;
       break;
     }
   }
 
   if (item.source === "canvas") score += 20;
-  if (item.source === "outlook" && (title.includes("grade") || title.includes("meeting"))) score += 25;
+  if (item.source === "outlook" && (title.includes("grade") || title.includes("meeting") || item.isUrgent)) score += 25;
 
   return score;
 }
 
-function generateAlgorithmicDigest(items) {
+function cleanJsonResponse(rawText) {
+  if (!rawText) throw new Error("Empty response from AI");
+  let text = String(rawText).trim();
+
+  // Strip markdown code fences if present
+  text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+
+  // Find first { and last }
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    text = text.substring(firstBrace, lastBrace + 1);
+  }
+
+  return JSON.parse(text);
+}
+
+function generateAlgorithmicDigest(items, customKeywords = []) {
   if (!items || items.length === 0) {
     return {
       engine: "Built-in Intelligence",
+      model: "Heuristic Engine",
       crunch_summary: "No pending deadlines or notifications found. Your schedule is clear!",
       top_priorities: [],
       society_highlights: "Explore student societies on the Guild website to get involved!"
     };
   }
 
-  // Sort by urgency score
   const scoredItems = items.map(item => ({
     ...item,
-    score: calculateUrgencyScore(item)
+    score: calculateUrgencyScore(item, customKeywords)
   })).sort((a, b) => b.score - a.score);
 
   const canvasDeadlines = items.filter(i => i.source === "canvas" && i.dueDate);
   const societyEvents = items.filter(i => i.source === "society");
 
-  // Build crunch summary
   let crunch = "";
   if (canvasDeadlines.length > 0) {
     crunch = `You have ${canvasDeadlines.length} upcoming academic deadline${canvasDeadlines.length > 1 ? "s" : ""} on Canvas.`;
@@ -79,10 +99,9 @@ function generateAlgorithmicDigest(items) {
     crunch = "You have no immediate coursework deadlines pending this week. Great job staying ahead!";
   }
 
-  // Top 3 priorities
   const topPriorities = scoredItems.slice(0, 3).map(item => {
     let reason = "Academic deadline requiring preparation.";
-    if (item.source === "outlook") reason = "Important university communication.";
+    if (item.source === "outlook") reason = "Important university notice/email.";
     if (item.dueDate) {
       const diffHours = Math.round((new Date(item.dueDate).getTime() - Date.now()) / (1000 * 60 * 60));
       if (diffHours <= 24 && diffHours >= 0) reason = `Due in ~${diffHours} hours!`;
@@ -96,7 +115,6 @@ function generateAlgorithmicDigest(items) {
     };
   });
 
-  // Society highlight
   let societyHighlight = "Take a break this week to check out society meetups at the Guild!";
   if (societyEvents.length > 0) {
     societyHighlight = `Upcoming social break: Don't miss "${societyEvents[0].title}" to recharge with fellow students!`;
@@ -104,6 +122,7 @@ function generateAlgorithmicDigest(items) {
 
   return {
     engine: "Built-in Intelligence",
+    model: "Heuristic Engine",
     crunch_summary: crunch,
     top_priorities: topPriorities,
     society_highlights: societyHighlight
@@ -111,24 +130,24 @@ function generateAlgorithmicDigest(items) {
 }
 
 async function analyzeWithLMStudio(items) {
-  const topItems = items.slice(0, 10).map(({ id, title, source, dueDate, snippet }) => ({
+  const topItems = items.slice(0, 8).map(({ id, title, source, dueDate, snippet }) => ({
     id, title, source, dueDate, snippet
   }));
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout
+  // Allow up to 25s for local 27B model inference
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
   const response = await fetch(LM_STUDIO_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "local-model",
+      model: MODEL_NAME,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: JSON.stringify(topItems) }
+        { role: "user", content: `Here is the current student JSON data: ${JSON.stringify(topItems)}. Return the JSON digest.` }
       ],
-      temperature: 0.2,
-      response_format: { type: "json_object" }
+      temperature: 0.2
     }),
     signal: controller.signal
   });
@@ -137,19 +156,22 @@ async function analyzeWithLMStudio(items) {
 
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const result = await response.json();
-  const content = JSON.parse(result?.choices?.[0]?.message?.content);
+  const rawContent = result?.choices?.[0]?.message?.content;
+  const parsed = cleanJsonResponse(rawContent);
+
   return {
-    engine: "LM Studio (Local LLM)",
-    ...content
+    engine: "Local AI (LM Studio)",
+    model: result.model || MODEL_NAME,
+    ...parsed
   };
 }
 
-async function generateSmartDigest(items) {
+async function generateSmartDigest(items, customKeywords = []) {
   try {
     return await analyzeWithLMStudio(items);
   } catch (err) {
-    console.info("[Intelligence] LM Studio offline or timed out, falling back to built-in rules:", err.message);
-    return generateAlgorithmicDigest(items);
+    console.info("[Intelligence] Local model error or timeout, falling back to heuristics:", err.message);
+    return generateAlgorithmicDigest(items, customKeywords);
   }
 }
 
@@ -175,7 +197,8 @@ const SAMPLE_UOB_DATA = [
     source: "outlook",
     dueDate: null,
     snippet: "Please note that tomorrow's 10am lecture is moved to Poynting Building Room 102.",
-    sender: "Prof. Alan Turing"
+    sender: "Prof. Alan Turing",
+    isUrgent: true
   },
   {
     id: "outlook-2",
