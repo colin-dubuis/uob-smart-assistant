@@ -12,6 +12,7 @@
   "host_permissions": [
     "https://canvas.bham.ac.uk/*",
     "https://myuob.bham.ac.uk/*",
+    "https://api.myday.cloud/*",
     "https://www.guildofstudents.com/*",
     "https://outlook.office.com/*",
     "https://outlook.cloud.microsoft/*",
@@ -45,6 +46,12 @@
   ],
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "UoB Smart Assistant"
+    "default_title": "UoB Smart Assistant",
+    "default_icon": {
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "128": "icons/icon128.png"
   }
 }

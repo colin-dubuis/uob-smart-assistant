@@ -7,7 +7,6 @@
     const parsed = Date.parse(cleanText);
     if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
 
-    // Check for "Due Oct 18 at 11:59pm" or "Tomorrow at 5:00pm"
     const now = new Date();
     if (/tomorrow/i.test(cleanText)) {
       const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 23, 59);
@@ -20,10 +19,36 @@
     return null;
   }
 
-  function extractCanvasItems() {
-    const items = [];
+  async function tryCanvasPlannerAPI() {
+    try {
+      const now = new Date().toISOString();
+      const url = `/api/v1/planner/items?start_date=${now}&per_page=50`;
+      const resp = await fetch(url, { credentials: "include" });
 
-    // Selectors covering Canvas dashboard To-Do list, planner, and calendar cards
+      if (resp.ok) {
+        const items = await resp.json();
+        if (Array.isArray(items) && items.length > 0) {
+          return items
+            .filter(i => i.plannable_type === "assignment" || i.plannable_type === "quiz" || i.plannable)
+            .map(i => ({
+              id: `canvas-${i.plannable_id || Math.random().toString(36).slice(2)}`,
+              title: i.plannable?.title || i.title || "Canvas Assignment",
+              course: i.context_name || "Canvas",
+              source: "canvas",
+              dueDate: i.plannable_date || i.plannable?.due_at || null,
+              snippet: `${i.context_name ? i.context_name + ": " : ""}${i.plannable_type || "Assignment"} due on Canvas`,
+              link: i.html_url || "https://canvas.bham.ac.uk/calendar"
+            }));
+        }
+      }
+    } catch (e) {
+      console.log("[Canvas Scraper] Planner API error, falling back to DOM:", e.message);
+    }
+    return null;
+  }
+
+  function extractCanvasDOMItems() {
+    const items = [];
     const candidates = document.querySelectorAll(
       '.todo-list-item, [data-testid*="todo"], ul.right-side-list li, .PlannerApp li, .ig-row, div[class*="Assignment"]'
     );
@@ -36,7 +61,6 @@
       const titleEl = el.querySelector('a, h3, h4, [class*="title"], [class*="Title"]');
       const title = clean(titleEl?.innerText) || fullText.split("\n")[0];
 
-      // Extract date/time from badges or text
       const dateEl = el.querySelector('time, [class*="due"], [class*="date"], [class*="Date"]');
       const dateRaw = clean(dateEl?.innerText) || fullText;
       const dueDate = parseDate(dateRaw);
@@ -44,7 +68,7 @@
       const link = el.querySelector("a")?.href || "https://canvas.bham.ac.uk";
 
       items.push({
-        id: `canvas-${idx + 1}`,
+        id: `canvas-dom-${idx + 1}`,
         title: title || `Canvas Task ${idx + 1}`,
         source: "canvas",
         dueDate: dueDate,
@@ -56,12 +80,23 @@
     return items;
   }
 
-  window.crawlCanvasData = extractCanvasItems;
+  async function crawlCanvasData() {
+    const apiItems = await tryCanvasPlannerAPI();
+    if (apiItems && apiItems.length > 0) {
+      console.log(`[Canvas Scraper] Retrieved ${apiItems.length} items from official Planner API`);
+      return apiItems;
+    }
+    const domItems = extractCanvasDOMItems();
+    console.log(`[Canvas Scraper] Retrieved ${domItems.length} items from DOM`);
+    return domItems;
+  }
+
+  window.crawlCanvasData = crawlCanvasData;
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "extract_canvas") {
-      sendResponse({ data: extractCanvasItems() });
+      crawlCanvasData().then(data => sendResponse({ data }));
+      return true;
     }
-    return true;
   });
 })();
