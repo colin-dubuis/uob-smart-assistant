@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Outlook extraction dashboard</title>
+    <link rel="stylesheet" href="dashboard.css">
+  </head>
+  <body>
+    <header class="header">
+      <div class="brand-mark" aria-hidden="true">O</div>
+      <div>
+        <p class="eyebrow">OUTLOOK EXTRACTOR</p>
+        <h1>Latest email</h1>
+      </div>
+      <button id="refresh" class="icon-button" type="button" aria-label="Refresh dashboard">↻</button>
+    </header>
+
+    <main>
+      <section id="empty" class="empty-state" hidden>
+        <div class="empty-icon" aria-hidden="true">✉</div>
+        <h2>Nothing extracted yet</h2>
+        <p>Open Outlook and click <strong>Extract today's email</strong>. Your latest result will appear here.</p>
+      </section>
+
+      <div id="result" hidden>
+        <section class="subject-card">
+          <p class="eyebrow">SUBJECT</p>
+          <h2 id="subject">—</h2>
+          <p id="received" class="muted"></p>
+        </section>
+
+        <section class="section">
+          <h3>People</h3>
+          <dl class="fields">
+            <div class="field">
+              <dt>From</dt>
+              <dd id="sender">—</dd>
+            </div>
+            <div class="field">
+              <dt>CC</dt>
+              <dd id="cc">—</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="section">
+          <h3>Attachments <span id="attachment-count" class="count"></span></h3>
+          <ul id="attachments" class="attachment-list"></ul>
+          <p id="no-attachments" class="muted">No visible attachment labels found.</p>
+        </section>
+
+        <section class="section body-section">
+          <h3>Message body</h3>
+          <p id="body" class="message-body"></p>
+        </section>
+
+        <details class="details">
+          <summary>Extraction details</summary>
+          <dl class="fields compact">
+            <div class="field">
+              <dt>Extracted</dt>
+              <dd id="extracted-at">—</dd>
+            </div>
+            <div class="field">
+              <dt>Page</dt>
+              <dd><a id="page-link" target="_blank" rel="noreferrer">Open Outlook</a></dd>
+            </div>
+          </dl>
+          <pre id="diagnostics"></pre>
+        </details>
+      </div>
+    </main>
+
+    <footer>Stored in this browser only · No Graph API</footer>
+    <script src="dashboard.js"></script>
+  </body>
+</html>

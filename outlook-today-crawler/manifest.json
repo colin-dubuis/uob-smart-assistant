@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Outlook Today Email Extractor",
+  "version": "1.0.0",
+  "description": "Extract today's email from the open Outlook page.",
+  "permissions": ["downloads", "storage"],
+  "host_permissions": [
+    "https://outlook.cloud.microsoft/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://outlook.cloud.microsoft/*"
+      ],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_title": "Outlook extraction dashboard",
+    "default_popup": "dashboard.html"
+  }
+}
