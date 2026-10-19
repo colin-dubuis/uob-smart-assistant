@@ -43,13 +43,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   const itemsContainer = document.getElementById("itemsContainer");
   const lastUpdated = document.getElementById("lastUpdated");
 
+  // Custom Sites elements
+  const customSiteInput = document.getElementById("customSiteInput");
+  const customSiteLabelInput = document.getElementById("customSiteLabelInput");
+  const addCustomSiteBtn = document.getElementById("addCustomSiteBtn");
+  const customSitesList = document.getElementById("customSitesList");
+
   let currentItems = [];
   let activeFilter = "all";
   let searchQuery = "";
   let currentKeywords = [...DEFAULT_KEYWORDS];
+  let customSites = [];
 
   // ── Black / Dark Mode Theme Setup ──
-  const storedData = await chrome.storage.local.get(["darkMode", "keywords", "scrapedItems", "lastDigest", "lastCrawlTime"]);
+  const storedData = await chrome.storage.local.get([
+    "darkMode", "keywords", "scrapedItems", "lastDigest", "lastCrawlTime", "customSites"
+  ]);
 
   if (storedData.darkMode) {
     document.body.classList.add("dark-mode");
@@ -131,6 +140,75 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
+  // ── Custom Sites Management ──
+  if (Array.isArray(storedData.customSites)) {
+    customSites = storedData.customSites;
+  }
+  renderCustomSites();
+
+  function normalizeUrl(raw) {
+    raw = (raw || "").trim();
+    if (!raw) return null;
+    if (!/^https?:\/\//i.test(raw)) raw = "https://" + raw;
+    try {
+      return new URL(raw).href;
+    } catch {
+      return null;
+    }
+  }
+
+  async function addCustomSite() {
+    const url = normalizeUrl(customSiteInput.value);
+    if (!url) {
+      showStatus("Invalid URL. Please enter a valid website address (e.g. https://example.com)", true);
+      return;
+    }
+    const label = (customSiteLabelInput.value || "").trim() ||
+                  new URL(url).hostname;
+
+    if (customSites.some(s => s.url === url)) {
+      showStatus("This website is already in your custom sites list.", true);
+      return;
+    }
+
+    customSites.push({ url, label });
+    await chrome.storage.local.set({ customSites });
+    customSiteInput.value = "";
+    customSiteLabelInput.value = "";
+    renderCustomSites();
+    showStatus(`Added "${label}" to custom crawl sites!`);
+    setTimeout(hideStatus, 2500);
+  }
+
+  addCustomSiteBtn.addEventListener("click", addCustomSite);
+
+  customSiteInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") addCustomSite();
+  });
+
+  function renderCustomSites() {
+    customSitesList.innerHTML = "";
+    if (customSites.length === 0) {
+      customSitesList.innerHTML = `<div class="custom-site-empty">No custom sites added yet.</div>`;
+      return;
+    }
+    customSites.forEach((site, idx) => {
+      const row = document.createElement("div");
+      row.className = "custom-site-row";
+      row.innerHTML = `
+        <span class="custom-site-label" title="${escapeHtml(site.url)}">${escapeHtml(site.label)}</span>
+        <span class="custom-site-url">${escapeHtml(new URL(site.url).hostname)}</span>
+        <button class="custom-site-remove" title="Remove site" data-idx="${idx}">×</button>
+      `;
+      row.querySelector(".custom-site-remove").addEventListener("click", async () => {
+        customSites.splice(idx, 1);
+        await chrome.storage.local.set({ customSites });
+        renderCustomSites();
+      });
+      customSitesList.appendChild(row);
+    });
+  }
+
   // ── Keyword Search ──
   keywordSearch.addEventListener("input", (e) => {
     searchQuery = (e.target.value || "").trim().toLowerCase();
@@ -185,7 +263,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     lastUpdated.innerText = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
-  // ── Joule's Due Date Formatter ──
+  // ── Due Date Formatter ──
   function formatDue(dateStr) {
     if (!dateStr) return null;
     const due = new Date(dateStr);
@@ -235,7 +313,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     societyHighlights.innerText = digest.society_highlights || "Check out campus society events!";
   }
 
-  // ── Render Items (Longer List with Rich Portal Cards) ──
+  // ── Render Items ──
   function renderItems() {
     itemsContainer.innerHTML = "";
 
@@ -244,6 +322,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (activeFilter !== "all") {
         if (activeFilter === "library") {
           if (item.source !== "library" && item.source !== "careers") return false;
+        } else if (activeFilter === "custom") {
+          if (item.source !== "custom") return false;
         } else if (item.source !== activeFilter) {
           return false;
         }
@@ -255,10 +335,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         const snippet = (item.snippet || "").toLowerCase();
         const sender = (item.sender || "").toLowerCase();
         const course = (item.course || "").toLowerCase();
+        const site = (item.customSite || "").toLowerCase();
         return title.includes(searchQuery) ||
                snippet.includes(searchQuery) ||
                sender.includes(searchQuery) ||
-               course.includes(searchQuery);
+               course.includes(searchQuery) ||
+               site.includes(searchQuery);
       }
       return true;
     });
@@ -277,11 +359,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     filtered.forEach(item => {
       const card = document.createElement("div");
       card.className = "item-card";
-      card.title = item.url ? "Click to open portal item" : "";
 
-      if (item.url) {
+      // FIX: use item.url (the canonical field), with item.link as a fallback for old data
+      const itemUrl = item.url || item.link || null;
+      card.title = itemUrl ? "Click to open in browser" : "";
+
+      if (itemUrl) {
         card.addEventListener("click", () => {
-          chrome.tabs.create({ url: item.url });
+          chrome.tabs.create({ url: itemUrl });
         });
       }
 
@@ -294,8 +379,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }
 
-      // Course or Sender Meta
-      const metaText = item.course || item.sender || "";
+      // Course or Sender Meta — for custom sites show the hostname
+      const metaText = item.course || item.sender || item.customSite || "";
 
       // Matched Keywords chips
       const fullTextLower = `${item.title} ${item.snippet}`.toLowerCase();
@@ -306,12 +391,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         kwChipsHtml = `<div class="keywords-row">${pills}</div>`;
       }
 
+      // Badge label: for custom items show domain
+      const badgeSource = item.source === "custom" ? "custom" : item.source;
+      const badgeLabel = item.source === "custom"
+        ? (item.customSite || "custom")
+        : item.source;
+
       card.innerHTML = `
         <div class="item-header">
           <span class="item-title">${escapeHtml(item.title)}</span>
           <div class="item-badges-group">
             ${dueHtml}
-            <span class="item-badge badge-${item.source}">${item.source}</span>
+            <span class="item-badge badge-${badgeSource}">${badgeLabel}</span>
           </div>
         </div>
         ${metaText ? `<div class="item-meta-row"><span class="meta-course">${escapeHtml(metaText)}</span></div>` : ""}
@@ -339,12 +430,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     btnSync.disabled = true;
     statusBadge.className = "status-badge crawling";
     statusBadge.innerText = "Syncing...";
-    showStatus("Opening tabs and crawling Canvas, Outlook, MyUoB, Guild & Library...");
+    const siteCount = customSites.length > 0 ? `, ${customSites.length} custom site(s)` : "";
+    showStatus(`Crawling Canvas, Outlook, MyUoB, Guild, Library${siteCount}...`);
 
     try {
       chrome.runtime.sendMessage({ action: "start_crawl" }, async (response) => {
+        if (chrome.runtime.lastError) {
+          showStatus(`Crawl error: ${chrome.runtime.lastError.message}`, true);
+          statusBadge.className = "status-badge ready";
+          statusBadge.innerText = "Ready";
+          btnSync.disabled = false;
+          return;
+        }
+
         if (!response || !response.success) {
-          showStatus("Crawl complete with warnings. Tip: Use 'Demo Data' for offline presentation.", true);
+          showStatus("Crawl completed with warnings. Use 'Demo Data' for offline preview.", true);
           statusBadge.className = "status-badge ready";
           statusBadge.innerText = "Ready";
           btnSync.disabled = false;
@@ -355,7 +455,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentItems = items;
         renderItems();
 
-        showStatus("Analyzing with Gemma 4 (12B) AI model...");
+        showStatus(`Analyzing ${items.length} items with Gemma 4 AI...`);
         const digest = await window.generateSmartDigest(items, currentKeywords);
         renderDigest(digest);
 
@@ -380,9 +480,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // ── Handle Demo Mode (14 Multi-Portal Items) ──
+  // ── Handle Demo Mode ──
   btnDemo.addEventListener("click", async () => {
-    showStatus("Loading 14 multi-portal items & analyzing with Gemma 4 (12B)...");
+    showStatus("Loading demo items & analyzing with Gemma 4 (12B)...");
     currentItems = window.SAMPLE_UOB_DATA;
     renderItems();
 
@@ -396,11 +496,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     lastUpdated.innerText = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    showStatus(`Loaded 14 items and analyzed with ${digest.model || "Gemma 4"}!`);
+    showStatus(`Loaded ${currentItems.length} items and analyzed with ${digest.model || "Gemma 4"}!`);
     setTimeout(hideStatus, 3000);
   });
 
-  // ── Handle Clear All Data (Fresh Crawl) ──
+  // ── Handle Clear All Data ──
   btnClear.addEventListener("click", async () => {
     if (confirm("Delete all stored crawled items and start completely fresh?")) {
       await chrome.storage.local.remove(["scrapedItems", "lastDigest", "lastCrawlTime"]);

@@ -14,14 +14,14 @@
         <div class="brand-icon">🎓</div>
         <div>
           <h1>UoB Assistant</h1>
-          <span class="subtitle">Multi-Portal Crawler & AI Digest</span>
+          <span class="subtitle">Multi-Portal Crawler &amp; AI Digest</span>
         </div>
       </div>
       <div class="header-controls">
         <button id="themeToggle" class="btn-icon-toggle" title="Toggle Black / Dark Mode">
           <span id="themeIcon">🌙</span>
         </button>
-        <button id="settingsBtn" class="btn-icon-toggle" title="Keyword Settings & Help">
+        <button id="settingsBtn" class="btn-icon-toggle" title="Keyword Settings &amp; Help">
           <span>⚙️</span>
         </button>
         <div id="statusBadge" class="status-badge ready">Ready</div>
@@ -31,7 +31,7 @@
     <!-- Settings & Keyword Help Panel (Collapsible) -->
     <section id="settingsPanel" class="settings-drawer hidden">
       <div class="settings-header">
-        <h3>⚙️ Keyword Filters & Priority Help</h3>
+        <h3>⚙️ Keyword Filters &amp; Priority Help</h3>
         <button id="closeSettingsBtn" class="btn-close" title="Close settings">×</button>
       </div>
 
@@ -43,7 +43,7 @@
         <span class="preset-label">Quick Presets:</span>
         <button class="preset-pill" data-preset="deadlines">+ Deadlines</button>
         <button class="preset-pill" data-preset="exams">+ Exams</button>
-        <button class="preset-pill" data-preset="socials">+ Free Food & Events</button>
+        <button class="preset-pill" data-preset="socials">+ Free Food &amp; Events</button>
         <button class="preset-pill" data-preset="careers">+ Careers</button>
       </div>
 
@@ -53,12 +53,27 @@
         <input type="text" id="newKeywordInput" placeholder="Add custom keyword (e.g. hackathon, dissertation)..." autocomplete="off">
         <button id="addKeywordBtn" class="btn-add">Add</button>
       </div>
+
+      <!-- Custom Website Crawler Section -->
+      <div class="settings-section-title">🌐 Custom Websites to Crawl</div>
+
+      <div class="keyword-help-box">
+        🔍 Add any website URL and the crawler will extract text content from it during Sync. Useful for department pages, society websites, or any custom resource.
+      </div>
+
+      <div id="customSitesList" class="custom-sites-list"></div>
+
+      <div class="custom-site-add-row">
+        <input type="text" id="customSiteInput" placeholder="https://example.com/news" autocomplete="off">
+        <input type="text" id="customSiteLabelInput" placeholder="Label (optional)" autocomplete="off">
+        <button id="addCustomSiteBtn" class="btn-add">Add Site</button>
+      </div>
     </section>
 
     <!-- Primary Action Bar -->
     <div class="action-bar">
       <button id="btnSync" class="btn-primary">
-        <span class="btn-icon">⚡</span> Sync & Analyze All Portals
+        <span class="btn-icon">⚡</span> Sync &amp; Analyze All Portals
       </button>
       <div class="secondary-actions">
         <button id="btnDemo" class="btn-secondary" title="Load sample student data for demonstration">
@@ -79,7 +94,7 @@
     <!-- Navigation Tabs -->
     <div class="tabs">
       <button class="tab-btn active" data-tab="ai-briefing">✨ AI Briefing</button>
-      <button class="tab-btn" data-tab="all-items">📋 Student Portal Items (<span id="itemCount">0</span>)</button>
+      <button class="tab-btn" data-tab="all-items">📋 Portal Items (<span id="itemCount">0</span>)</button>
     </div>
 
     <!-- Content Sections -->
@@ -99,7 +114,7 @@
             <h3>Academic Crunch Overview</h3>
           </div>
           <p id="crunchSummary" class="card-body">
-            Click <strong>Sync & Analyze</strong> to crawl your open portals, or <strong>Demo Data</strong> to preview.
+            Click <strong>Sync &amp; Analyze</strong> to crawl your open portals, or <strong>Demo Data</strong> to preview.
           </p>
         </div>
 
@@ -118,7 +133,7 @@
         <div class="digest-card society-card">
           <div class="card-title">
             <span class="icon">🎉</span>
-            <h3>Campus & Society Pulse</h3>
+            <h3>Campus &amp; Society Pulse</h3>
           </div>
           <p id="societyHighlights" class="card-body">
             Stay balanced! Campus society highlights will appear here after sync.
@@ -143,6 +158,7 @@
           <button class="filter-pill" data-filter="myuob">MyUoB</button>
           <button class="filter-pill" data-filter="society">Societies</button>
           <button class="filter-pill" data-filter="library">Library/Careers</button>
+          <button class="filter-pill" data-filter="custom">🌐 Custom</button>
         </div>
 
         <!-- Scrollable Long Items Container -->
@@ -154,7 +170,7 @@
 
     <!-- Footer -->
     <footer class="app-footer">
-      <span>Auto-crawls Canvas, Outlook, MyUoB, Guild & Library</span>
+      <span>Canvas · Outlook · MyUoB · Guild · Library · Custom Sites</span>
       <span id="lastUpdated" class="last-updated">Never</span>
     </footer>
   </div>

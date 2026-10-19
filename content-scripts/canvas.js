@@ -1,4 +1,7 @@
 (() => {
+  if (window.__canvasCrawlerLoaded) return;
+  window.__canvasCrawlerLoaded = true;
+
   const clean = text => (text || "").replace(/\s+/g, " ").trim();
 
   function parseDate(text) {
@@ -37,7 +40,8 @@
               source: "canvas",
               dueDate: i.plannable_date || i.plannable?.due_at || null,
               snippet: `${i.context_name ? i.context_name + ": " : ""}${i.plannable_type || "Assignment"} due on Canvas`,
-              link: i.html_url || "https://canvas.bham.ac.uk/calendar"
+              // FIX: use "url" (not "link") to be consistent with popup.js rendering
+              url: i.html_url || "https://canvas.bham.ac.uk/calendar"
             }));
         }
       }
@@ -65,7 +69,8 @@
       const dateRaw = clean(dateEl?.innerText) || fullText;
       const dueDate = parseDate(dateRaw);
 
-      const link = el.querySelector("a")?.href || "https://canvas.bham.ac.uk";
+      // FIX: use "url" (not "link") to be consistent with popup.js rendering
+      const url = el.querySelector("a")?.href || "https://canvas.bham.ac.uk";
 
       items.push({
         id: `canvas-dom-${idx + 1}`,
@@ -73,7 +78,7 @@
         source: "canvas",
         dueDate: dueDate,
         snippet: fullText.slice(0, 160),
-        link: link
+        url: url
       });
     });
 

@@ -1,4 +1,7 @@
 (() => {
+  if (window.__myuobCrawlerLoaded) return;
+  window.__myuobCrawlerLoaded = true;
+
   const clean = text => (text || "").replace(/\s+/g, " ").trim();
   const pad = n => String(n).padStart(2, "0");
 
@@ -17,7 +20,7 @@
   // Parse time expressions like "7-9pm", "19:00", "7:30pm"
   function parseTimes(str) {
     if (!str) return null;
-    const time = String.raw`(\d{1,2})(?:[:.](\d{2}))?`;
+    const time = String.raw`(\d{1,2})(?:[:.:](\d{2}))?`;
     const shared = new RegExp(
       String.raw`\b${time}\s*(?:-|–|—|to|until|till)\s*${time}\s*(a\.?m\.?|p\.?m\.?)\b`,
       "i"
@@ -34,7 +37,7 @@
     }
 
     const re = new RegExp(
-      String.raw`\b(\d{1,2})(?:[:.](\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b|\b([01]?\d|2[0-3]):([0-5]\d)\b`,
+      String.raw`\b(\d{1,2})(?:[:.:](\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b|\b([01]?\d|2[0-3]):([0-5]\d)\b`,
       "gi"
     );
     let m = re.exec(str);
@@ -84,14 +87,22 @@
           ? data
           : data.items || data.activities || data.tasks || data.notifications || [];
 
+        // FIX: tag with correct source depending on which URL the script runs on.
+        // When injected into myuob.bham.ac.uk → source "myuob"
+        // When injected into guildofstudents.com → source "society"
+        const sourceTag = window.location.hostname.includes("guildofstudents") ? "society" : "myuob";
+
         items.forEach((item, idx) => {
           results.push({
             id: `myuob-api-${item.id || idx}`,
             title: item.name || item.title || item.subject || item.message || "MyUoB Notice",
-            source: "society",
+            source: sourceTag,
             dueDate: item.startDateTime || item.start || item.dueDate || item.date || null,
             snippet: `${item.location || item.room || ""} ${item.description || item.body || ""}`.trim(),
-            link: item.url || "https://myuob.bham.ac.uk/dashboard/student-home"
+            // FIX: use "url" (not "link") to be consistent with popup.js rendering
+            url: item.url || (sourceTag === "society"
+              ? "https://www.guildofstudents.com/events"
+              : "https://myuob.bham.ac.uk/dashboard/student-home")
           });
         });
 
@@ -105,6 +116,14 @@
 
   // ── 2. DOM Scrape for Guild of Students and MyUoB tiles ──
   function extractSocietyDOMItems() {
+    // FIX: tag source correctly based on actual page hostname
+    const isGuild = window.location.hostname.includes("guildofstudents");
+    const isLibrary = window.location.hostname.includes("intranet.birmingham") ||
+                      window.location.href.includes("librari");
+    let sourceTag = "myuob";
+    if (isGuild) sourceTag = "society";
+    if (isLibrary) sourceTag = "library";
+
     const items = [];
     const cards = document.querySelectorAll(
       '.event-item, .ms-event-card, .event_item, article, [class*="event-card"], [class*="EventCard"], .content-item, [class*="tile" i]'
@@ -123,19 +142,21 @@
       const dateText = clean(dateEl?.getAttribute("datetime") || dateEl?.innerText) || fullText;
       const dueDate = parseEventDate(dateText);
 
-      // Extract time details (e.g. 19:00 - 21:00) using meeting finder algorithm
       const timing = parseTimes(fullText);
       const timeInfo = timing?.start ? ` (Starts ${timing.start}${timing.end ? " - " + timing.end : ""})` : "";
 
-      const link = card.querySelector("a")?.href || "https://www.guildofstudents.com/events";
+      // FIX: use "url" (not "link") to be consistent with popup.js rendering
+      const url = card.querySelector("a")?.href || (isGuild
+        ? "https://www.guildofstudents.com/events"
+        : "https://myuob.bham.ac.uk/dashboard/student-home");
 
       items.push({
-        id: `society-dom-${idx + 1}`,
+        id: `${sourceTag}-dom-${idx + 1}`,
         title: title + timeInfo,
-        source: "society",
+        source: sourceTag,
         dueDate: dueDate,
         snippet: fullText.slice(0, 160),
-        link: link
+        url: url
       });
     });
 
