@@ -13,21 +13,6 @@ An intelligent, local-first Chromium extension that eliminates student notificat
   <!-- Autoplaying live preview (zero clicks needed) -->
   <img src="assets/demo.gif" alt="UoB Smart Assistant Live Demo Preview" width="100%" style="max-width: 820px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15);" />
 
-  <br/><br/>
-
-  <!-- Full interactive video player with controls -->
-  <video src="https://github.com/user-attachments/assets/c96bbea6-08fd-43e8-ade1-79a28d3230c8" controls="controls" width="100%" style="max-width: 820px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15);">
-    <a href="https://github.com/user-attachments/assets/c96bbea6-08fd-43e8-ade1-79a28d3230c8">
-      <img src="assets/demo-thumbnail.png" alt="Watch Full HD Walkthrough" width="100%" style="max-width: 820px; border-radius: 8px;" />
-    </a>
-  </video>
-
-  <p align="center">
-    <sub><em>▶️ Above: Instant autoplay preview. Below: Full HD walkthrough (1 min 43s) with native player controls.</em></sub>
-  </p>
-
-</div>
-
 ---
 
 ## 📑 Table of Contents
