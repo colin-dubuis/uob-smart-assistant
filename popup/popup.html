@@ -3,175 +3,182 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>UoB Smart Assistant</title>
+  <title>UoB Assistant / Falter Edition</title>
   <link rel="stylesheet" href="popup.css">
 </head>
-<body>
+<body class="dark-mode">
   <div class="app-container">
-    <!-- Header -->
+    <!-- Top Brand & Controls Header -->
     <header class="app-header">
       <div class="brand">
-        <div class="brand-icon">🎓</div>
-        <div>
-          <h1>UoB Assistant</h1>
-          <span class="subtitle">Multi-Portal Crawler &amp; AI Digest</span>
+        <span class="brand-numeral">UOB</span>
+        <div class="brand-text">
+          <h1>ASSISTANT</h1>
+          <span class="subtitle">LOCAL ACADEMIC INTELLIGENCE</span>
         </div>
       </div>
       <div class="header-controls">
-        <button id="themeToggle" class="btn-icon-toggle" title="Toggle Black / Dark Mode">
-          <span id="themeIcon">🌙</span>
+        <button id="themeToggle" class="btn-icon-toggle" title="Toggle Light / Dark Mode" aria-label="Toggle theme">
+          <span id="themeIcon">☀️</span>
         </button>
-        <button id="settingsBtn" class="btn-icon-toggle" title="Keyword Settings &amp; Help">
-          <span>⚙️</span>
+        <button id="settingsBtn" class="btn-icon-toggle" title="Settings & Filters" aria-label="Open settings">
+          <span>⚙</span>
         </button>
-        <div id="statusBadge" class="status-badge ready">Ready</div>
+        <div id="statusBadge" class="status-badge ready">READY</div>
       </div>
     </header>
 
-    <!-- Settings & Keyword Help Panel (Collapsible) -->
+    <!-- Hairline Divider -->
+    <div class="gradient-line"></div>
+
+    <!-- Settings & Keyword Help Panel (Collapsible Drawer) -->
     <section id="settingsPanel" class="settings-drawer hidden">
       <div class="settings-header">
-        <h3>⚙️ Keyword Filters &amp; Priority Help</h3>
-        <button id="closeSettingsBtn" class="btn-close" title="Close settings">×</button>
+        <span class="settings-title">SYSTEM CONFIGURATION</span>
+        <button id="closeSettingsBtn" class="btn-close" title="Close settings">✕</button>
       </div>
 
-      <div class="keyword-help-box">
-        💡 <strong>How it works:</strong> Emails, announcements, and tasks matching any of these keywords are automatically flagged, boosted in urgency, and analyzed by the AI model.
+      <div class="settings-sub">
+        <span class="settings-section-tag">01 / KEYWORD RECOGNITION</span>
+        <p class="settings-desc">
+          Matched terms boost urgency score and feed priority extraction into the local LLM.
+        </p>
       </div>
 
       <div class="preset-row">
-        <span class="preset-label">Quick Presets:</span>
-        <button class="preset-pill" data-preset="deadlines">+ Deadlines</button>
-        <button class="preset-pill" data-preset="exams">+ Exams</button>
-        <button class="preset-pill" data-preset="socials">+ Free Food &amp; Events</button>
-        <button class="preset-pill" data-preset="careers">+ Careers</button>
+        <span class="preset-label">PRESETS:</span>
+        <button class="preset-pill" data-preset="deadlines">DEADLINES</button>
+        <button class="preset-pill" data-preset="exams">EXAMS</button>
+        <button class="preset-pill" data-preset="socials">SOCIALS</button>
+        <button class="preset-pill" data-preset="careers">CAREERS</button>
       </div>
 
       <div id="keywordChipsContainer" class="keyword-chips-list"></div>
 
       <div class="keyword-add-row">
-        <input type="text" id="newKeywordInput" placeholder="Add custom keyword (e.g. hackathon, dissertation)..." autocomplete="off">
-        <button id="addKeywordBtn" class="btn-add">Add</button>
+        <input type="text" id="newKeywordInput" placeholder="Add custom keyword..." autocomplete="off">
+        <button id="addKeywordBtn" class="btn-add">ADD</button>
       </div>
 
-      <!-- Custom Website Crawler Section -->
-      <div class="settings-section-title">🌐 Custom Websites to Crawl</div>
+      <div class="gradient-line subtle"></div>
 
-      <div class="keyword-help-box">
-        🔍 Add any website URL and the crawler will extract text content from it during Sync. Useful for department pages, society websites, or any custom resource.
+      <div class="settings-sub">
+        <span class="settings-section-tag">02 / CUSTOM WEBSITES TO CRAWL</span>
+        <p class="settings-desc">
+          Register any web portal or society page to crawl alongside University of Birmingham systems.
+        </p>
       </div>
 
       <div id="customSitesList" class="custom-sites-list"></div>
 
       <div class="custom-site-add-row">
-        <input type="text" id="customSiteInput" placeholder="https://example.com/news" autocomplete="off">
-        <input type="text" id="customSiteLabelInput" placeholder="Label (optional)" autocomplete="off">
-        <button id="addCustomSiteBtn" class="btn-add">Add Site</button>
+        <input type="text" id="customSiteInput" placeholder="https://example.com/events" autocomplete="off">
+        <input type="text" id="customSiteLabelInput" placeholder="Label" autocomplete="off">
+        <button id="addCustomSiteBtn" class="btn-add">ADD SITE</button>
       </div>
     </section>
 
-    <!-- Primary Action Bar -->
+    <!-- Primary Action Bar (Only Sync and Clear Data; Demo and Export removed) -->
     <div class="action-bar">
       <button id="btnSync" class="btn-primary">
-        <span class="btn-icon">⚡</span> Sync &amp; Analyze All Portals
+        <span class="btn-symbol">⚡</span> SYNC &amp; ANALYZE ALL PORTALS
       </button>
-      <div class="secondary-actions">
-        <button id="btnDemo" class="btn-secondary" title="Load sample student data for demonstration">
-          🎯 Demo Data
-        </button>
-        <button id="btnExport" class="btn-secondary" title="Download raw JSON data">
-          💾 Export JSON
-        </button>
-        <button id="btnClear" class="btn-secondary btn-danger" title="Delete all stored crawl data to start completely fresh">
-          🗑️ Clear Data
-        </button>
-      </div>
+      <button id="btnClear" class="btn-secondary btn-danger" title="Purge stored data to perform a fresh crawl">
+        CLEAR DATA
+      </button>
     </div>
 
-    <!-- Status feedback banner -->
+    <!-- Live Status Feedback Banner -->
     <div id="statusBar" class="status-message hidden"></div>
 
-    <!-- Navigation Tabs -->
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="ai-briefing">✨ AI Briefing</button>
-      <button class="tab-btn" data-tab="all-items">📋 Portal Items (<span id="itemCount">0</span>)</button>
-    </div>
+    <!-- Navigation Tabs (Falter Numbered Index Style) -->
+    <nav class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="ai-briefing" role="tab">
+        <span class="tab-index">01</span> BRIEFING
+      </button>
+      <button class="tab-btn" data-tab="all-items" role="tab">
+        <span class="tab-index">02</span> PORTAL FEED (<span id="itemCount">0</span>)
+      </button>
+    </nav>
 
-    <!-- Content Sections -->
+    <!-- Main Content Panes -->
     <main class="tab-content">
-      <!-- Tab 1: AI Briefing -->
+      <!-- Tab 1: AI Briefing Pane -->
       <section id="tab-ai-briefing" class="tab-pane active">
-        <!-- Engine Indicator & Model Badge -->
+        <!-- Engine Telemetry Bar -->
         <div class="engine-bar">
-          <div id="engineTag" class="engine-tag">Checking AI engine...</div>
+          <span id="engineTag" class="engine-tag">ENGINE: LOCAL AI</span>
           <span class="model-badge">google/gemma-4-12b-qat</span>
         </div>
 
         <!-- Academic Crunch Overview -->
         <div class="digest-card crunch-card">
-          <div class="card-title">
-            <span class="icon">📊</span>
-            <h3>Academic Crunch Overview</h3>
+          <div class="card-header">
+            <span class="card-num">01</span>
+            <h3>ACADEMIC CRUNCH OVERVIEW</h3>
           </div>
           <p id="crunchSummary" class="card-body">
-            Click <strong>Sync &amp; Analyze</strong> to crawl your open portals, or <strong>Demo Data</strong> to preview.
+            Click <strong>SYNC &amp; ANALYZE ALL PORTALS</strong> to crawl your active portals and synthesize an immediate digest.
           </p>
         </div>
 
-        <!-- Top Priorities -->
-        <div class="digest-card">
-          <div class="card-title">
-            <span class="icon">🔥</span>
-            <h3>Top 3 Urgent Priorities</h3>
+        <!-- Top Urgent Priorities -->
+        <div class="digest-card priority-card">
+          <div class="card-header">
+            <span class="card-num">02</span>
+            <h3>TOP CRITICAL PRIORITIES</h3>
           </div>
           <div id="topPrioritiesList" class="priorities-list">
-            <div class="empty-state">No priorities analyzed yet.</div>
+            <div class="empty-state">No priorities analyzed yet. Run Sync to process.</div>
           </div>
         </div>
 
-        <!-- Society & Campus Pulse -->
+        <!-- Campus & Society Pulse -->
         <div class="digest-card society-card">
-          <div class="card-title">
-            <span class="icon">🎉</span>
-            <h3>Campus &amp; Society Pulse</h3>
+          <div class="card-header">
+            <span class="card-num">03</span>
+            <h3>CAMPUS &amp; SOCIETY PULSE</h3>
           </div>
           <p id="societyHighlights" class="card-body">
-            Stay balanced! Campus society highlights will appear here after sync.
+            Extracted society notifications and campus events will be summarized here.
           </p>
         </div>
       </section>
 
-      <!-- Tab 2: All Items (Expanded List with Multi-Portal Filters) -->
+      <!-- Tab 2: All Items Feed Pane -->
       <section id="tab-all-items" class="tab-pane">
-        <!-- Keyword Search Input -->
+        <!-- Search Input -->
         <div class="search-box">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="keywordSearch" placeholder="Filter items by keyword, module code, sender..." autocomplete="off">
-          <button id="clearSearch" class="btn-clear hidden" title="Clear search">×</button>
+          <span class="search-symbol">⌕</span>
+          <input type="text" id="keywordSearch" placeholder="Filter by keyword, course, sender..." autocomplete="off">
+          <button id="clearSearch" class="btn-clear hidden" title="Clear search">✕</button>
         </div>
 
-        <!-- Multi-Source filter pills -->
+        <!-- Multi-Portal Source Filters -->
         <div class="filter-bar">
-          <button class="filter-pill active" data-filter="all">All (<span id="countAll">0</span>)</button>
-          <button class="filter-pill" data-filter="canvas">Canvas</button>
-          <button class="filter-pill" data-filter="outlook">Outlook</button>
-          <button class="filter-pill" data-filter="myuob">MyUoB</button>
-          <button class="filter-pill" data-filter="society">Societies</button>
-          <button class="filter-pill" data-filter="library">Library/Careers</button>
-          <button class="filter-pill" data-filter="custom">🌐 Custom</button>
+          <button class="filter-pill active" data-filter="all">ALL (<span id="countAll">0</span>)</button>
+          <button class="filter-pill" data-filter="canvas">CANVAS</button>
+          <button class="filter-pill" data-filter="outlook">OUTLOOK</button>
+          <button class="filter-pill" data-filter="myuob">MYUOB</button>
+          <button class="filter-pill" data-filter="society">SOCIETIES</button>
+          <button class="filter-pill" data-filter="library">LIBRARY</button>
+          <button class="filter-pill" data-filter="custom">CUSTOM</button>
         </div>
 
-        <!-- Scrollable Long Items Container -->
+        <!-- Scrollable Feed Container -->
         <div id="itemsContainer" class="items-list">
-          <div class="empty-state">No scraped portal data stored yet. Click "Sync" to crawl.</div>
+          <div class="empty-state">No portal items crawled yet. Click "Sync" to crawl.</div>
         </div>
       </section>
     </main>
 
-    <!-- Footer -->
+    <!-- Hairline Divider -->
+    <div class="gradient-line"></div>
+
+    <!-- Minimalist Editorial Footer -->
     <footer class="app-footer">
-      <span>Canvas · Outlook · MyUoB · Guild · Library · Custom Sites</span>
-      <span id="lastUpdated" class="last-updated">Never</span>
+      <span class="footer-target">CANVAS · OUTLOOK · MYUOB · GUILD · CUSTOM</span>
+      <span id="lastUpdated" class="last-updated">NEVER UPDATED</span>
     </footer>
   </div>
 

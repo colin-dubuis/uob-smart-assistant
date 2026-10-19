@@ -47,7 +47,8 @@
       "matches": [
         "https://outlook.office.com/*",
         "https://outlook.cloud.microsoft/*",
-        "https://outlook.office365.com/*"
+        "https://outlook.office365.com/*",
+        "https://outlook.live.com/*"
       ],
       "js": ["content-scripts/outlook.js"],
       "run_at": "document_idle"

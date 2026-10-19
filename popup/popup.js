@@ -16,8 +16,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const statusBadge = document.getElementById("statusBadge");
   const statusBar = document.getElementById("statusBar");
   const btnSync = document.getElementById("btnSync");
-  const btnDemo = document.getElementById("btnDemo");
-  const btnExport = document.getElementById("btnExport");
   const btnClear = document.getElementById("btnClear");
   const themeToggle = document.getElementById("themeToggle");
   const themeIcon = document.getElementById("themeIcon");
@@ -55,15 +53,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   let currentKeywords = [...DEFAULT_KEYWORDS];
   let customSites = [];
 
-  // ── Black / Dark Mode Theme Setup ──
+  // ── Falter Theme Mode Setup (Dark is primary) ──
   const storedData = await chrome.storage.local.get([
     "darkMode", "keywords", "scrapedItems", "lastDigest", "lastCrawlTime", "customSites"
   ]);
 
-  if (storedData.darkMode) {
+  // Default to dark mode (Falter Inferno style)
+  const isDarkMode = storedData.darkMode !== false;
+  if (isDarkMode) {
     document.body.classList.add("dark-mode");
     themeIcon.innerText = "☀️";
   } else {
+    document.body.classList.remove("dark-mode");
     themeIcon.innerText = "🌙";
   }
 
@@ -92,7 +93,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     currentKeywords.forEach((kw, idx) => {
       const chip = document.createElement("span");
       chip.className = "kw-chip";
-      chip.innerHTML = `${escapeHtml(kw)} <button aria-label="Remove ${escapeHtml(kw)}" title="Remove keyword">×</button>`;
+      chip.innerHTML = `${escapeHtml(kw)} <button aria-label="Remove ${escapeHtml(kw)}" title="Remove keyword">✕</button>`;
       chip.querySelector("button").addEventListener("click", async () => {
         currentKeywords.splice(idx, 1);
         renderKeywordChips();
@@ -135,7 +136,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       renderKeywordChips();
       await chrome.storage.local.set({ keywords: currentKeywords });
       renderItems();
-      showStatus(`Added ${presetName} keyword preset!`);
+      showStatus(`PRESET APPLIED: ${presetName.toUpperCase()}`);
       setTimeout(hideStatus, 2000);
     });
   });
@@ -160,14 +161,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function addCustomSite() {
     const url = normalizeUrl(customSiteInput.value);
     if (!url) {
-      showStatus("Invalid URL. Please enter a valid website address (e.g. https://example.com)", true);
+      showStatus("INVALID URL. PLEASE ENTER A VALID WEB ADDRESS", true);
       return;
     }
     const label = (customSiteLabelInput.value || "").trim() ||
                   new URL(url).hostname;
 
     if (customSites.some(s => s.url === url)) {
-      showStatus("This website is already in your custom sites list.", true);
+      showStatus("WEBSITE ALREADY REGISTERED IN CUSTOM SITES", true);
       return;
     }
 
@@ -176,7 +177,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     customSiteInput.value = "";
     customSiteLabelInput.value = "";
     renderCustomSites();
-    showStatus(`Added "${label}" to custom crawl sites!`);
+    showStatus(`REGISTERED SITE: ${label.toUpperCase()}`);
     setTimeout(hideStatus, 2500);
   }
 
@@ -189,7 +190,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   function renderCustomSites() {
     customSitesList.innerHTML = "";
     if (customSites.length === 0) {
-      customSitesList.innerHTML = `<div class="custom-site-empty">No custom sites added yet.</div>`;
+      customSitesList.innerHTML = `<div class="custom-site-empty">NO CUSTOM TARGETS CONFIGURED.</div>`;
       return;
     }
     customSites.forEach((site, idx) => {
@@ -198,7 +199,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       row.innerHTML = `
         <span class="custom-site-label" title="${escapeHtml(site.url)}">${escapeHtml(site.label)}</span>
         <span class="custom-site-url">${escapeHtml(new URL(site.url).hostname)}</span>
-        <button class="custom-site-remove" title="Remove site" data-idx="${idx}">×</button>
+        <button class="custom-site-remove" title="Remove site" data-idx="${idx}">✕</button>
       `;
       row.querySelector(".custom-site-remove").addEventListener("click", async () => {
         customSites.splice(idx, 1);
@@ -260,14 +261,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   if (storedData.lastCrawlTime) {
     const d = new Date(storedData.lastCrawlTime);
-    lastUpdated.innerText = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    lastUpdated.innerText = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }).toUpperCase();
   }
 
   // ── Due Date Formatter ──
   function formatDue(dateStr) {
     if (!dateStr) return null;
     const due = new Date(dateStr);
-    if (isNaN(due.getTime())) return { label: dateStr, cls: "due-upcoming" };
+    if (isNaN(due.getTime())) return { label: dateStr.toUpperCase(), cls: "due-upcoming" };
 
     const now = Date.now();
     const diff = due.getTime() - now;
@@ -276,21 +277,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     const days = Math.floor(hours / 24);
 
     if (diff < 0) {
-      return { label: `Overdue ${days > 0 ? days + "d ago" : hours + "h ago"}`, cls: "due-overdue" };
+      return { label: `OVERDUE ${days > 0 ? days + "D" : hours + "H"}`, cls: "due-overdue" };
     }
     if (diff <= 48 * 60 * 60 * 1000) {
-      return { label: `Due in ${hours}h`, cls: "due-soon" };
+      return { label: `IN ${hours}H`, cls: "due-soon" };
     }
     return {
-      label: `Due ${due.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`,
+      label: due.toLocaleDateString("en-GB", { day: "numeric", month: "short" }).toUpperCase(),
       cls: "due-upcoming"
     };
   }
 
   function renderDigest(digest) {
     if (!digest) return;
-    engineTag.innerText = digest.engine || "AI Analyzed";
-    crunchSummary.innerText = digest.crunch_summary || "No crunch summary available.";
+    engineTag.innerText = `ENGINE: ${(digest.engine || "LOCAL AI").toUpperCase()}`;
+    crunchSummary.innerText = digest.crunch_summary || "No active workload crunch detected.";
 
     topPrioritiesList.innerHTML = "";
     if (digest.top_priorities && digest.top_priorities.length > 0) {
@@ -299,18 +300,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         div.className = "priority-item";
         div.innerHTML = `
           <div class="priority-header">
-            <span class="priority-title">#${idx + 1} ${escapeHtml(item.title)}</span>
-            <span class="item-badge badge-${item.source || 'canvas'}">${item.source || 'Canvas'}</span>
+            <span class="priority-index">0${idx + 1}</span>
+            <span class="priority-title">${escapeHtml(item.title)}</span>
+            <span class="item-badge badge-${item.source || 'canvas'}">${(item.source || 'CANVAS').toUpperCase()}</span>
           </div>
-          <div class="priority-reason">${escapeHtml(item.reason || "Urgent task")}</div>
+          <div class="priority-reason">${escapeHtml(item.reason || "High urgency item requiring attention.")}</div>
         `;
         topPrioritiesList.appendChild(div);
       });
     } else {
-      topPrioritiesList.innerHTML = `<div class="empty-state">No pressing priorities found!</div>`;
+      topPrioritiesList.innerHTML = `<div class="empty-state">No immediate critical priorities identified.</div>`;
     }
 
-    societyHighlights.innerText = digest.society_highlights || "Check out campus society events!";
+    societyHighlights.innerText = digest.society_highlights || "Campus societies schedule is clear.";
   }
 
   // ── Render Items ──
@@ -350,19 +352,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (filtered.length === 0) {
       const msg = searchQuery
-        ? `No portal items found matching "${escapeHtml(searchQuery)}"`
-        : `No items found for category: ${activeFilter}`;
+        ? `NO PORTAL ITEMS MATCHING "${escapeHtml(searchQuery).toUpperCase()}"`
+        : `NO RECORDS FOUND IN CATEGORY: ${activeFilter.toUpperCase()}`;
       itemsContainer.innerHTML = `<div class="empty-state">${msg}</div>`;
       return;
     }
 
-    filtered.forEach(item => {
+    filtered.forEach((item, idx) => {
       const card = document.createElement("div");
       card.className = "item-card";
 
-      // FIX: use item.url (the canonical field), with item.link as a fallback for old data
       const itemUrl = item.url || item.link || null;
-      card.title = itemUrl ? "Click to open in browser" : "";
+      card.title = itemUrl ? "Click to open target document in browser" : "";
 
       if (itemUrl) {
         card.addEventListener("click", () => {
@@ -379,7 +380,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }
 
-      // Course or Sender Meta — for custom sites show the hostname
+      // Course or Sender Meta
       const metaText = item.course || item.sender || item.customSite || "";
 
       // Matched Keywords chips
@@ -387,15 +388,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       const matched = currentKeywords.filter(k => fullTextLower.includes(k.toLowerCase()));
       let kwChipsHtml = "";
       if (matched.length > 0) {
-        const pills = matched.slice(0, 3).map(m => `<span class="kw-pill">#${escapeHtml(m)}</span>`).join("");
+        const pills = matched.slice(0, 3).map(m => `<span class="kw-pill">#${escapeHtml(m.toUpperCase())}</span>`).join("");
         kwChipsHtml = `<div class="keywords-row">${pills}</div>`;
       }
 
-      // Badge label: for custom items show domain
       const badgeSource = item.source === "custom" ? "custom" : item.source;
       const badgeLabel = item.source === "custom"
-        ? (item.customSite || "custom")
-        : item.source;
+        ? (item.customSite || "CUSTOM").toUpperCase()
+        : (item.source || "").toUpperCase();
 
       card.innerHTML = `
         <div class="item-header">
@@ -405,8 +405,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             <span class="item-badge badge-${badgeSource}">${badgeLabel}</span>
           </div>
         </div>
-        ${metaText ? `<div class="item-meta-row"><span class="meta-course">${escapeHtml(metaText)}</span></div>` : ""}
-        <div class="item-snippet">${escapeHtml(item.snippet || "No description provided.")}</div>
+        ${metaText ? `<div class="item-meta-row"><span class="meta-course">${escapeHtml(metaText.toUpperCase())}</span></div>` : ""}
+        <div class="item-snippet">${escapeHtml(item.snippet || "No additional excerpt available.")}</div>
         ${kwChipsHtml}
       `;
 
@@ -417,8 +417,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   function showStatus(text, isError = false) {
     statusBar.classList.remove("hidden");
     statusBar.innerText = text;
-    statusBar.style.background = isError ? "rgba(239, 68, 68, 0.2)" : "rgba(234, 179, 8, 0.2)";
-    statusBar.style.color = isError ? "#f87171" : "#fef08a";
+    statusBar.style.background = isError ? "rgba(225, 29, 72, 0.15)" : "rgba(255, 255, 255, 0.08)";
+    statusBar.style.color = isError ? "#f87171" : "#e5e5e5";
+    statusBar.style.borderColor = isError ? "rgba(225, 29, 72, 0.4)" : "rgba(255, 255, 255, 0.2)";
   }
 
   function hideStatus() {
@@ -429,24 +430,24 @@ document.addEventListener("DOMContentLoaded", async () => {
   btnSync.addEventListener("click", async () => {
     btnSync.disabled = true;
     statusBadge.className = "status-badge crawling";
-    statusBadge.innerText = "Syncing...";
-    const siteCount = customSites.length > 0 ? `, ${customSites.length} custom site(s)` : "";
-    showStatus(`Crawling Canvas, Outlook, MyUoB, Guild, Library${siteCount}...`);
+    statusBadge.innerText = "CRAWLING";
+    const siteCount = customSites.length > 0 ? ` + ${customSites.length} CUSTOM TARGETS` : "";
+    showStatus(`SCANNING CANVAS, OUTLOOK, MYUOB, GUILD${siteCount}...`);
 
     try {
       chrome.runtime.sendMessage({ action: "start_crawl" }, async (response) => {
         if (chrome.runtime.lastError) {
-          showStatus(`Crawl error: ${chrome.runtime.lastError.message}`, true);
+          showStatus(`SCAN FAULT: ${chrome.runtime.lastError.message.toUpperCase()}`, true);
           statusBadge.className = "status-badge ready";
-          statusBadge.innerText = "Ready";
+          statusBadge.innerText = "READY";
           btnSync.disabled = false;
           return;
         }
 
         if (!response || !response.success) {
-          showStatus("Crawl completed with warnings. Use 'Demo Data' for offline preview.", true);
+          showStatus("SCAN COMPLETED WITH WARNINGS. CHECK TAB LOGS.", true);
           statusBadge.className = "status-badge ready";
-          statusBadge.innerText = "Ready";
+          statusBadge.innerText = "READY";
           btnSync.disabled = false;
           return;
         }
@@ -455,7 +456,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentItems = items;
         renderItems();
 
-        showStatus(`Analyzing ${items.length} items with Gemma 4 AI...`);
+        showStatus(`SYNTHESIZING ${items.length} ITEMS VIA LOCAL GEMMA 4...`);
         const digest = await window.generateSmartDigest(items, currentKeywords);
         renderDigest(digest);
 
@@ -465,77 +466,42 @@ document.addEventListener("DOMContentLoaded", async () => {
           lastCrawlTime: new Date().toISOString()
         });
 
-        lastUpdated.innerText = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        showStatus(`Done! Analyzed ${items.length} items with ${digest.model || "Gemma 4"}.`);
+        lastUpdated.innerText = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }).toUpperCase();
+        showStatus(`COMPLETE / ${items.length} ITEMS PROCESSED BY ${digest.model || "GEMMA 4"}`);
         setTimeout(hideStatus, 4000);
 
         statusBadge.className = "status-badge ready";
-        statusBadge.innerText = "Ready";
+        statusBadge.innerText = "READY";
         btnSync.disabled = false;
       });
     } catch (err) {
-      showStatus(`Error during crawl: ${err.message}`, true);
+      showStatus(`ORCHESTRATOR ERROR: ${err.message.toUpperCase()}`, true);
       btnSync.disabled = false;
       statusBadge.className = "status-badge ready";
     }
   });
 
-  // ── Handle Demo Mode ──
-  btnDemo.addEventListener("click", async () => {
-    showStatus("Loading demo items & analyzing with Gemma 4 (12B)...");
-    currentItems = window.SAMPLE_UOB_DATA;
-    renderItems();
-
-    const digest = await window.generateSmartDigest(currentItems, currentKeywords);
-    renderDigest(digest);
-
-    await chrome.storage.local.set({
-      scrapedItems: currentItems,
-      lastDigest: digest,
-      lastCrawlTime: new Date().toISOString()
-    });
-
-    lastUpdated.innerText = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    showStatus(`Loaded ${currentItems.length} items and analyzed with ${digest.model || "Gemma 4"}!`);
-    setTimeout(hideStatus, 3000);
-  });
-
-  // ── Handle Clear All Data ──
+  // ── Handle Clear All Data (Purge) ──
   btnClear.addEventListener("click", async () => {
-    if (confirm("Delete all stored crawled items and start completely fresh?")) {
+    if (confirm("Purge all stored portal data and start completely fresh?")) {
       await chrome.storage.local.remove(["scrapedItems", "lastDigest", "lastCrawlTime"]);
       currentItems = [];
       itemCount.innerText = "0";
       countAll.innerText = "0";
-      lastUpdated.innerText = "Never";
-      engineTag.innerText = "Cleared";
-      crunchSummary.innerText = "All data cleared. Click 'Sync & Analyze All Portals' to crawl fresh items from your open tabs.";
-      topPrioritiesList.innerHTML = `<div class="empty-state">No priorities yet. Start a fresh crawl!</div>`;
-      societyHighlights.innerText = "Social events will appear here after fresh crawl.";
+      lastUpdated.innerText = "NEVER UPDATED";
+      engineTag.innerText = "ENGINE: CLEARED";
+      crunchSummary.innerText = "Data purged. Click 'SYNC & ANALYZE ALL PORTALS' to initiate fresh extraction.";
+      topPrioritiesList.innerHTML = `<div class="empty-state">No priorities yet. Run Sync to analyze.</div>`;
+      societyHighlights.innerText = "Campus highlights will appear after synchronization.";
       renderItems();
-      showStatus("All stored data cleared! Ready for fresh crawl.");
+      showStatus("ALL LOCAL CACHE PURGED");
       setTimeout(hideStatus, 3000);
     }
   });
 
-  // ── Handle Export JSON ──
-  btnExport.addEventListener("click", () => {
-    if (currentItems.length === 0) {
-      alert("No data available to export. Click Sync or Demo first!");
-      return;
-    }
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentItems, null, 2));
-    const downloadAnchor = document.createElement("a");
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "uob-student-portal-data.json");
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-  });
-
   chrome.runtime.onMessage.addListener((request) => {
     if (request.action === "crawl_status") {
-      showStatus(request.message);
+      showStatus(request.message.toUpperCase());
     }
   });
 
