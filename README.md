@@ -34,27 +34,36 @@ Most existing aggregator tools either rely on paid proprietary cloud services or
 
 ---
 
+---
+
 ## ✨ What the Extension Does
 
 ### 1. Multi-Portal Hybrid Crawling
-- **Canvas LMS**: Queries the official authenticated Canvas Planner REST API (`/api/v1/planner/items`) using the browser's active session cookies, with an automatic fallback to DOM scraping.
-- **Outlook Web**: Automatically detects and extracts up to **50 recent emails** using a programmatic virtual-scroll engine across `outlook.office.com`, `outlook.cloud.microsoft`, and `outlook.office365.com`.
-- **MyUoB & Guild Societies**: Interfaces with the `api.myday.cloud` REST endpoints for personal timetables and scrapes the Guild website using a precision timing parser (`parseTimes`) for recurring days and time slots (e.g., `Starts 19:00 - 21:00`).
-- **Library & Careers**: Tracks book return deadlines (to avoid fines) and student employment deadlines via Careers Connect.
+- **Canvas LMS**: Queries the official authenticated Canvas Planner REST API (`/api/v1/planner/items`) using the browser's active session cookies, with an automatic fallback to DOM scraping. Converts relative Canvas API URLs into direct absolute links.
+- **Outlook Web (CodeURJC Architecture)**: Re-engineered using the battle-tested strategy of [`codeurjc/outlook-scraper`](https://github.com/codeurjc/outlook-scraper). The service worker intercepts live `Authorization: Bearer <token>` and `X-AnchorMailbox` headers on `/owa/service.svc` using `chrome.webRequest.onBeforeSendHeaders` (with `extraHeaders`). It calls OWA's internal `FindItem` JSON API with standard EWS schemas (`item:Subject`, `item:DateTimeReceived`, `item:Preview`, etc.) to retrieve up to **50 recent emails** instantly. If the API is unreachable, an ultra-resilient multi-selector virtual-scroll DOM crawler takes over automatically.
+- **MyUoB & Guild Societies**: Interfaces with the `api.myday.cloud` REST endpoints for personal timetables and scrapes the Guild of Students website using a precision timing parser (`parseTimes`) for recurring days and time slots (e.g., `Starts 19:00 - 21:00`).
+- **Library & Careers**: Tracks book return deadlines (to avoid overdue fines) and student employment deadlines via Careers Connect.
+- **🌐 User-Added Custom Websites**: Enables students to register custom sites (departmental wikis, external course blogs, project portals) in Settings. A dedicated semantic extractor (`content-scripts/custom.js`) extracts headings, dates, urgency signals, and source links.
 
-### 2. Dual-Engine Intelligence
+### 2. Direct Source Verification (`PROOF ↗`)
+- Every aggregated card across Canvas, Outlook, societies, and custom portals includes a direct **`PROOF ↗`** action button.
+- Clicking it immediately takes the student to the exact URL where the information originated (e.g. direct Canvas assignment page, specific Outlook message thread `/mail/id/...`, or society event page) instead of a broken extension URL or generic portal root.
+
+### 3. Dual-Engine Intelligence
 - **Primary AI (On-Device via LM Studio)**: Connects to a local instance of `google/gemma-4-12b-qat` running on `http://127.0.0.1:1234/v1/chat/completions`. It performs structured JSON synthesis without sending any student data over the internet:
   - **Academic Crunch Summary**: A concise 2-sentence breakdown of upcoming workload peaks.
   - **Top 3 Urgent Priorities**: Actionable, high-impact items with specific urgency reasons.
   - **Campus & Society Pulse**: Work-life balance recommendations (socials, pizza nights, hackathons).
 - **Heuristic Fallback Engine**: If the local LLM is offline or busy, a built-in rule engine immediately scores items based on deadline proximity and urgency keywords (`exam`, `due`, `submission`, `coursework`, `urgent`), ensuring the dashboard **never crashes or freezes**.
 
-### 3. Student Dashboard & UI Features
-- **🌙 True Black Mode**: High-contrast, obsidian-themed dark mode (`#05070c`) with persistent theme saving in `chrome.storage.local`.
+### 4. Falter Inferno Aesthetic & UI
+- **Brutalist, High-Contrast Design**: Redesigned after the stark, minimalist aesthetic of `falter.wild.plus`—pure obsidian backgrounds (`#0d0d0d`), razor-sharp white borders (`rgba(255,255,255,0.15)`), monospaced status labels, uppercase tracking, and clean zero-clutter typography.
 - **🔍 Instant Keyword Search**: Live filtering across all aggregated items (by subject, module code, sender, or snippet).
-- **⚙️ Keyword Help & Preset Manager**: Slide-down drawer with 1-click presets (`+ Deadlines`, `+ Exams`, `+ Free Food & Events`, `+ Careers`) and custom keyword management.
-- **Direct Portal Jump**: Clicking any assignment, email, or event card immediately opens the original portal page in a new browser tab.
-- **Data Lifecycle Management**: 1-click **Demo Mode** (loads 14 multi-portal Birmingham items for testing), **Export JSON** (downloads standardized student data), and **Clear Data** (resets storage for clean crawls).
+- **⚙️ Slide-Down Configuration Drawer**:
+  - **01 / AI MODEL & PROMPT CONFIG**: Fine-tune local model endpoints, timeouts, and urgency keywords.
+  - **02 / CUSTOM TARGETS**: Add, inspect, and remove custom URLs to be crawled during portal syncs.
+  - **03 / DATA MANAGEMENT**: Cleanly wipe local caches for clean crawls without cluttering the main dashboard.
+
 
 ---
 
@@ -167,9 +176,13 @@ During the 3-hour hackathon, we followed an agile, iterative engineering strateg
   }
   ```
 
-### 2. Outlook's Virtualized List & The 50-Email Requirement
-- **Symptom**: Standard DOM queries (`querySelectorAll('[role="option"]')`) only returned 10–15 emails because Outlook Web unmounts off-screen elements.
-- **Solution**: Developed a programmatic virtual-scroll loop in [`content-scripts/outlook.js`] It locates the internal scroll container (`ConversationList` / `role="listbox"`), extracts rendered items, deduplicates by `subject + sender`, and programmatically scrolls down in 500px increments until **50 unique emails** are collected.
+### 2. Outlook's Auth Closure & The 50-Email Requirement
+- **Symptom**: Microsoft Outlook Web does not store MSAL Bearer tokens in `localStorage` or `sessionStorage` (they are kept in an in-memory JS closure), and unauthenticated calls to `/owa/service.svc` are rejected. Furthermore, standard DOM scraping alone (`querySelectorAll('[role="option"]')`) is fragile because React Fluent UI virtualizes the list and unmounts off-screen emails after 10–15 rows.
+- **Solution**: Inspired by [`codeurjc/outlook-scraper`](https://github.com/codeurjc/outlook-scraper), we implemented a multi-stage approach:
+  1. The background service worker intercepts live Outlook network traffic via `chrome.webRequest.onBeforeSendHeaders` (specifically including `extraHeaders` so Chrome does not withhold the `Authorization` header), capturing the genuine `Bearer <token>` and `X-AnchorMailbox`.
+  2. Tokens are persisted to `chrome.storage.local` to survive Manifest V3 service worker idle shutdowns.
+  3. The content script calls OWA's internal `FindItem` JSON API with EWS schemas (`item:Subject`, `item:DateTimeReceived`, `item:Preview`, `message:From`), fetching up to 50 emails in one fast, reliable request.
+  4. If the API is not yet warmed up or token capture is pending, an ultra-resilient multi-selector virtual-scroll DOM crawler (`content-scripts/outlook.js`) triggers programmatic wheel events and `scrollIntoView` to safely extract visible items.
 
 ### 3. SSO & Auth Bounces in Background Tabs
 - **Symptom**: Opening a background tab to `outlook.cloud.microsoft` would frequently bounce between Microsoft login redirects or trigger 2FA prompts.
@@ -221,10 +234,9 @@ While the hackathon prototype won 1st place, several enhancements would make it 
 5. Pin the **UoB Assistant** icon to your browser toolbar.
 
 ### 2. Using the Dashboard
-- **Click "⚡ Sync & Analyze All Portals"**: Opens your open university tabs, extracts recent data, closes background tabs, and renders the AI digest.
-- **Click "🎯 Demo Data"**: Instantly loads a realistic 14-item Birmingham student dataset (CS coursework, exam notices, society hackathons, library loans) for offline testing and presentations.
-- **Click "🗑️ Clear Data"**: Resets all stored data to perform a completely fresh crawl.
-- **Click "💾 Export JSON"**: Downloads `uob-student-portal-data.json` for backup or external scripts.
+- **Click "⚡ SYNC PORTALS"**: Reuses any currently open authenticated portal tabs or opens background tabs to scrape Canvas, Outlook, MyUoB, Society events, Library loans, and registered custom websites.
+- **Click "PROOF ↗" on any item**: Deep-links directly to the verified source URL (Canvas assignment, Outlook email thread, or society notice) so you can audit the source immediately.
+- **Click "⚙ CONFIG"**: Opens the settings drawer to fine-tune AI model endpoints, register custom websites, or clear local storage cache (`03 / DATA MANAGEMENT`).
 
 ---
 
