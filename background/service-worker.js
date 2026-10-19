@@ -42,6 +42,38 @@ function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function normalizeTargetUrl(rawUrl, targetBaseUrl, source) {
+  let fallback = targetBaseUrl;
+  if (!fallback) {
+    if (source === "canvas") fallback = "https://canvas.bham.ac.uk";
+    else if (source === "outlook") fallback = "https://outlook.office.com/mail/inbox";
+    else if (source === "society") fallback = "https://www.guildofstudents.com/events";
+    else if (source === "library") fallback = "https://intranet.birmingham.ac.uk/student/libraries/index.aspx";
+    else if (source === "myuob") fallback = "https://myuob.bham.ac.uk/dashboard/student-home";
+    else fallback = "https://canvas.bham.ac.uk";
+  }
+
+  if (!rawUrl || typeof rawUrl !== "string") return fallback;
+  let trimmed = rawUrl.trim();
+  if (!trimmed) return fallback;
+
+  // Strip extension scheme if present
+  const extMatch = trimmed.match(/^chrome-extension:\/\/[a-z0-9]+\/(.*)$/i);
+  if (extMatch) {
+    trimmed = extMatch[1];
+  }
+
+  // Already absolute http/https
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+
+  try {
+    const base = new URL(fallback);
+    return new URL(trimmed.startsWith("/") ? trimmed : `/${trimmed}`, base.origin).href;
+  } catch {
+    return fallback;
+  }
+}
+
 async function findExistingTab(target) {
   try {
     const host = new URL(target.url).hostname;
@@ -121,14 +153,16 @@ async function crawlTab(target) {
       args: [target.funcName]
     });
 
-    // FIX: Do NOT override item.source here — each content script sets the correct
-    // source internally (e.g. "myuob" vs "society" based on actual page hostname).
-    // Only stamp source if the item has no source at all (safety net).
+    // Ensure all URLs are absolute target URLs and not relative or extension URLs
     const rawItems = results?.[0]?.result || [];
-    const items = rawItems.map(item => ({
-      ...item,
-      source: item.source || target.source
-    }));
+    const items = rawItems.map(item => {
+      const src = item.source || target.source;
+      return {
+        ...item,
+        source: src,
+        url: normalizeTargetUrl(item.url || item.link, target.url, src)
+      };
+    });
 
     console.log(`[Crawler] ${target.name} returned ${items.length} items`);
     return items;
@@ -195,7 +229,13 @@ async function crawlCustomSite(customTarget) {
       }
     });
 
-    const items = results?.[0]?.result || [];
+    const rawItems = results?.[0]?.result || [];
+    const items = rawItems.map(item => ({
+      ...item,
+      source: "custom",
+      customSite: customTarget.name,
+      url: normalizeTargetUrl(item.url || item.link, customTarget.url, "custom")
+    }));
     console.log(`[Custom Crawler] ${customTarget.url} returned ${items.length} items`);
     return items;
   } catch (err) {

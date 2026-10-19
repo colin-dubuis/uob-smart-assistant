@@ -139,6 +139,7 @@
           const fullText = `${subject} ${sender} ${snippet}`.toLowerCase();
           const matched = DEFAULT_KEYWORDS.filter(kw => fullText.includes(kw));
 
+          const baseOrigin = window.location.origin?.startsWith("http") ? window.location.origin : "https://outlook.office.com";
           return {
             id: `outlook-api-${idx + 1}-${Math.random().toString(36).slice(2, 6)}`,
             title: subject,
@@ -147,7 +148,7 @@
             date: dateStr,
             sender: sender,
             snippet: snippet,
-            url: `https://outlook.office.com/mail/id/${encodeURIComponent(itemId)}`,
+            url: `${baseOrigin}/mail/id/${encodeURIComponent(itemId)}`,
             isUrgent: matched.length > 0,
             matchedKeywords: matched
           };
@@ -303,9 +304,10 @@
     const convid = row.getAttribute("data-convid") ||
                    row.getAttribute("data-item-index") ||
                    row.querySelector("a[href]")?.getAttribute("href");
+    const baseOrigin = window.location.origin?.startsWith("http") ? window.location.origin : "https://outlook.office.com";
     const emailUrl = convid && convid.startsWith("http")
       ? convid
-      : (convid ? `https://outlook.office.com/mail/id/${encodeURIComponent(convid)}` : "https://outlook.office.com/mail/inbox");
+      : (convid ? `${baseOrigin}/mail/id/${encodeURIComponent(convid)}` : `${baseOrigin}/mail/inbox`);
 
     const fullContent = `${subject} ${sender} ${snippet}`.toLowerCase();
     const matched = DEFAULT_KEYWORDS.filter(kw => fullContent.includes(kw));

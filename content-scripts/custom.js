@@ -40,7 +40,15 @@
       if (title.length > 120) title = title.slice(0, 120) + "…";
 
       const linkEl = el.querySelector("a[href]");
-      const url = linkEl?.href || window.location.href;
+      let url = window.location.href;
+      if (linkEl) {
+        try {
+          const raw = linkEl.getAttribute("href") || linkEl.href;
+          url = new URL(raw, window.location.origin).href;
+        } catch {
+          url = linkEl.href || window.location.href;
+        }
+      }
 
       // Try to extract a date
       const timeEl = el.querySelector("time, [datetime], [class*='date' i]");

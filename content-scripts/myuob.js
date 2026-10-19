@@ -66,6 +66,15 @@
     return null;
   }
 
+  function toAbsoluteUrl(rawUrl, fallback) {
+    if (!rawUrl) return fallback;
+    try {
+      return new URL(rawUrl, window.location.origin).href;
+    } catch {
+      return fallback;
+    }
+  }
+
   // ── 1. Try MyDay REST APIs (when logged in to MyUoB) ──
   async function tryMyDayAPI() {
     const endpoints = [
@@ -91,6 +100,9 @@
         // When injected into myuob.bham.ac.uk → source "myuob"
         // When injected into guildofstudents.com → source "society"
         const sourceTag = window.location.hostname.includes("guildofstudents") ? "society" : "myuob";
+        const fallbackUrl = sourceTag === "society"
+          ? "https://www.guildofstudents.com/events"
+          : "https://myuob.bham.ac.uk/dashboard/student-home";
 
         items.forEach((item, idx) => {
           results.push({
@@ -99,10 +111,7 @@
             source: sourceTag,
             dueDate: item.startDateTime || item.start || item.dueDate || item.date || null,
             snippet: `${item.location || item.room || ""} ${item.description || item.body || ""}`.trim(),
-            // FIX: use "url" (not "link") to be consistent with popup.js rendering
-            url: item.url || (sourceTag === "society"
-              ? "https://www.guildofstudents.com/events"
-              : "https://myuob.bham.ac.uk/dashboard/student-home")
+            url: toAbsoluteUrl(item.url, fallbackUrl)
           });
         });
 
@@ -123,6 +132,10 @@
     let sourceTag = "myuob";
     if (isGuild) sourceTag = "society";
     if (isLibrary) sourceTag = "library";
+
+    const fallbackUrl = isGuild
+      ? "https://www.guildofstudents.com/events"
+      : (isLibrary ? "https://intranet.birmingham.ac.uk/student/libraries/index.aspx" : "https://myuob.bham.ac.uk/dashboard/student-home");
 
     const items = [];
     const cards = document.querySelectorAll(
@@ -145,10 +158,9 @@
       const timing = parseTimes(fullText);
       const timeInfo = timing?.start ? ` (Starts ${timing.start}${timing.end ? " - " + timing.end : ""})` : "";
 
-      // FIX: use "url" (not "link") to be consistent with popup.js rendering
-      const url = card.querySelector("a")?.href || (isGuild
-        ? "https://www.guildofstudents.com/events"
-        : "https://myuob.bham.ac.uk/dashboard/student-home");
+      const anchor = card.querySelector("a[href]");
+      const rawHref = anchor ? anchor.getAttribute("href") || anchor.href : null;
+      const url = toAbsoluteUrl(rawHref, fallbackUrl);
 
       items.push({
         id: `${sourceTag}-dom-${idx + 1}`,

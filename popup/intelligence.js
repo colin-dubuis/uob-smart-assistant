@@ -113,7 +113,8 @@ function generateAlgorithmicDigest(items, customKeywords = []) {
       id: item.id,
       title: item.title,
       source: item.source,
-      reason: reason
+      reason: reason,
+      url: item.url || null
     };
   });
 
@@ -133,13 +134,14 @@ function generateAlgorithmicDigest(items, customKeywords = []) {
 
 async function analyzeWithLMStudio(items) {
   // Keep prompt compact: top 8 items with essential fields only to keep token processing fast
-  const topItems = items.slice(0, 8).map(({ id, title, source, course, dueDate, snippet }) => ({
+  const topItems = items.slice(0, 8).map(({ id, title, source, course, dueDate, snippet, url }) => ({
     id,
     title,
     source,
     course: course || "",
     dueDate: dueDate || null,
-    snippet: (snippet || "").slice(0, 100)
+    snippet: (snippet || "").slice(0, 100),
+    url: url || ""
   }));
 
   const controller = new AbortController();

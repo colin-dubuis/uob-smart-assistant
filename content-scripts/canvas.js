@@ -22,6 +22,13 @@
     return null;
   }
 
+  function toAbsoluteCanvasUrl(path) {
+    if (!path) return "https://canvas.bham.ac.uk/calendar";
+    if (/^https?:\/\//i.test(path)) return path;
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    return `https://canvas.bham.ac.uk${cleanPath}`;
+  }
+
   async function tryCanvasPlannerAPI() {
     try {
       const now = new Date().toISOString();
@@ -33,16 +40,22 @@
         if (Array.isArray(items) && items.length > 0) {
           return items
             .filter(i => i.plannable_type === "assignment" || i.plannable_type === "quiz" || i.plannable)
-            .map(i => ({
-              id: `canvas-${i.plannable_id || Math.random().toString(36).slice(2)}`,
-              title: i.plannable?.title || i.title || "Canvas Assignment",
-              course: i.context_name || "Canvas",
-              source: "canvas",
-              dueDate: i.plannable_date || i.plannable?.due_at || null,
-              snippet: `${i.context_name ? i.context_name + ": " : ""}${i.plannable_type || "Assignment"} due on Canvas`,
-              // FIX: use "url" (not "link") to be consistent with popup.js rendering
-              url: i.html_url || "https://canvas.bham.ac.uk/calendar"
-            }));
+            .map(i => {
+              const rawUrl = i.html_url ||
+                (i.course_id && i.plannable_id
+                  ? `/courses/${i.course_id}/${i.plannable_type === "quiz" ? "quizzes" : "assignments"}/${i.plannable_id}`
+                  : "/calendar");
+
+              return {
+                id: `canvas-${i.plannable_id || Math.random().toString(36).slice(2)}`,
+                title: i.plannable?.title || i.title || "Canvas Assignment",
+                course: i.context_name || "Canvas",
+                source: "canvas",
+                dueDate: i.plannable_date || i.plannable?.due_at || null,
+                snippet: `${i.context_name ? i.context_name + ": " : ""}${i.plannable_type || "Assignment"} due on Canvas`,
+                url: toAbsoluteCanvasUrl(rawUrl)
+              };
+            });
         }
       }
     } catch (e) {
@@ -69,8 +82,9 @@
       const dateRaw = clean(dateEl?.innerText) || fullText;
       const dueDate = parseDate(dateRaw);
 
-      // FIX: use "url" (not "link") to be consistent with popup.js rendering
-      const url = el.querySelector("a")?.href || "https://canvas.bham.ac.uk";
+      const anchor = el.querySelector("a[href]");
+      const rawHref = anchor ? anchor.getAttribute("href") || anchor.href : null;
+      const url = toAbsoluteCanvasUrl(rawHref);
 
       items.push({
         id: `canvas-dom-${idx + 1}`,

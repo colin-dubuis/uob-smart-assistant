@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "UoB Smart Assistant",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Unified student portal crawler and AI digest for Canvas, Outlook, MyUoB, Guild Societies, Library & Careers. Supports user-added custom websites.",
   "permissions": [
     "storage",

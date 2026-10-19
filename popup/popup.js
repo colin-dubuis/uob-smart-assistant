@@ -249,9 +249,68 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
+  // ── Robust Source Proof URL Resolver ──
+  function resolveItemUrl(item) {
+    if (!item) return "https://canvas.bham.ac.uk";
+
+    const portalDefaults = {
+      canvas: "https://canvas.bham.ac.uk",
+      outlook: "https://outlook.office.com/mail/inbox",
+      society: "https://www.guildofstudents.com/events",
+      library: "https://intranet.birmingham.ac.uk/student/libraries/index.aspx",
+      careers: "https://careersconnect.bham.ac.uk",
+      myuob: "https://myuob.bham.ac.uk/dashboard/student-home"
+    };
+
+    let baseOrigin = portalDefaults[item.source] || "https://canvas.bham.ac.uk";
+    if (item.source === "custom" && item.customSite) {
+      baseOrigin = /^https?:\/\//i.test(item.customSite)
+        ? item.customSite
+        : `https://${item.customSite}`;
+    }
+
+    const rawUrl = item.url || item.link || null;
+    if (!rawUrl || typeof rawUrl !== "string") {
+      return baseOrigin;
+    }
+
+    let trimmed = rawUrl.trim();
+
+    // Strip any invalid chrome-extension://<id>/ prefix if stored from earlier bug
+    const extMatch = trimmed.match(/^chrome-extension:\/\/[a-z0-9]+\/(.*)$/i);
+    if (extMatch) {
+      trimmed = extMatch[1];
+    }
+
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed;
+    }
+
+    try {
+      const base = new URL(baseOrigin);
+      const cleanPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+      return new URL(cleanPath, base.origin).href;
+    } catch {
+      return `${baseOrigin.replace(/\/+$/, "")}/${trimmed.replace(/^\/+/, "")}`;
+    }
+  }
+
   // ── Load Initial Stored State ──
   if (storedData.scrapedItems && storedData.scrapedItems.length > 0) {
-    currentItems = storedData.scrapedItems;
+    let modified = false;
+    currentItems = storedData.scrapedItems.map(item => {
+      const resolved = resolveItemUrl(item);
+      if (item.url !== resolved) {
+        modified = true;
+        return { ...item, url: resolved };
+      }
+      return item;
+    });
+
+    if (modified) {
+      chrome.storage.local.set({ scrapedItems: currentItems });
+    }
+
     itemCount.innerText = currentItems.length;
     countAll.innerText = currentItems.length;
     renderItems();
@@ -298,14 +357,42 @@ document.addEventListener("DOMContentLoaded", async () => {
       digest.top_priorities.forEach((item, idx) => {
         const div = document.createElement("div");
         div.className = "priority-item";
+
+        // Find matching item in currentItems to get verified proof URL
+        const matchedItem = currentItems.find(ci =>
+          (ci.id && item.id && ci.id === item.id) ||
+          (ci.title && item.title && ci.title.trim().toLowerCase() === item.title.trim().toLowerCase())
+        );
+        const priorityUrl = resolveItemUrl(matchedItem || item);
+
         div.innerHTML = `
           <div class="priority-header">
             <span class="priority-index">0${idx + 1}</span>
             <span class="priority-title">${escapeHtml(item.title)}</span>
             <span class="item-badge badge-${item.source || 'canvas'}">${(item.source || 'CANVAS').toUpperCase()}</span>
+            <a class="priority-proof-btn" href="${escapeHtml(priorityUrl)}" title="Verify evidence: open source link" target="_blank" rel="noopener">
+              PROOF ↗
+            </a>
           </div>
           <div class="priority-reason">${escapeHtml(item.reason || "High urgency item requiring attention.")}</div>
         `;
+
+        div.style.cursor = "pointer";
+        div.title = `Verify evidence: click to open ${priorityUrl}`;
+        div.addEventListener("click", (e) => {
+          if (e.target.closest("button") || e.target.closest("a")) return;
+          chrome.tabs.create({ url: priorityUrl });
+        });
+
+        const proofBtn = div.querySelector(".priority-proof-btn");
+        if (proofBtn) {
+          proofBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            chrome.tabs.create({ url: priorityUrl });
+          });
+        }
+
         topPrioritiesList.appendChild(div);
       });
     } else {
@@ -362,14 +449,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       const card = document.createElement("div");
       card.className = "item-card";
 
-      const itemUrl = item.url || item.link || null;
-      card.title = itemUrl ? "Click to open target document in browser" : "";
+      const targetUrl = resolveItemUrl(item);
+      card.title = `Verify evidence: click to open ${targetUrl}`;
+      card.style.cursor = "pointer";
 
-      if (itemUrl) {
-        card.addEventListener("click", () => {
-          chrome.tabs.create({ url: itemUrl });
-        });
-      }
+      card.addEventListener("click", (e) => {
+        if (e.target.closest("button") || e.target.closest("a")) return;
+        chrome.tabs.create({ url: targetUrl });
+      });
 
       // Urgency Pill
       let dueHtml = "";
@@ -407,8 +494,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         </div>
         ${metaText ? `<div class="item-meta-row"><span class="meta-course">${escapeHtml(metaText.toUpperCase())}</span></div>` : ""}
         <div class="item-snippet">${escapeHtml(item.snippet || "No additional excerpt available.")}</div>
-        ${kwChipsHtml}
+        <div class="item-footer-row">
+          ${kwChipsHtml || '<div></div>'}
+          <a class="proof-link" href="${escapeHtml(targetUrl)}" title="Open original link to proof this record" target="_blank" rel="noopener">
+            PROOF ↗
+          </a>
+        </div>
       `;
+
+      const proofBtn = card.querySelector(".proof-link");
+      if (proofBtn) {
+        proofBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          chrome.tabs.create({ url: targetUrl });
+        });
+      }
 
       itemsContainer.appendChild(card);
     });
@@ -452,7 +553,11 @@ document.addEventListener("DOMContentLoaded", async () => {
           return;
         }
 
-        const items = response.items || [];
+        const rawItems = response.items || [];
+        const items = rawItems.map(item => ({
+          ...item,
+          url: resolveItemUrl(item)
+        }));
         currentItems = items;
         renderItems();
 
