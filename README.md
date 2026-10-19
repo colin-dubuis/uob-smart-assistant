@@ -1,4 +1,4 @@
-# UoB Smart Assistant (UoB Palantir)
+# UoB Smart Assistant
 
 > **Winner (1st Place out of 12 Teams)** at the **Accenture X Builders Club Hackathon** (October 2026, University of Birmingham).
 
@@ -16,7 +16,6 @@ An intelligent, local-first Chromium extension that eliminates student notificat
 7. [Installation & Quick Start](#-installation--quick-start)
 8. [Running the Local AI Engine](#-running-the-local-ai-engine)
 9. [Project Structure](#-project-structure)
-10. [The Team](#-the-team)
 
 ---
 
@@ -170,7 +169,7 @@ During the 3-hour hackathon, we followed an agile, iterative engineering strateg
 
 ### 2. Outlook's Virtualized List & The 50-Email Requirement
 - **Symptom**: Standard DOM queries (`querySelectorAll('[role="option"]')`) only returned 10–15 emails because Outlook Web unmounts off-screen elements.
-- **Solution**: Developed a programmatic virtual-scroll loop in [`content-scripts/outlook.js`](file:///Users/colindubuis/Documents/ZHAW/7th%20semester%20%28Birmingham%29/BuilderSocity/content-scripts/outlook.js). It locates the internal scroll container (`ConversationList` / `role="listbox"`), extracts rendered items, deduplicates by `subject + sender`, and programmatically scrolls down in 500px increments until **50 unique emails** are collected.
+- **Solution**: Developed a programmatic virtual-scroll loop in [`content-scripts/outlook.js`] It locates the internal scroll container (`ConversationList` / `role="listbox"`), extracts rendered items, deduplicates by `subject + sender`, and programmatically scrolls down in 500px increments until **50 unique emails** are collected.
 
 ### 3. SSO & Auth Bounces in Background Tabs
 - **Symptom**: Opening a background tab to `outlook.cloud.microsoft` would frequently bounce between Microsoft login redirects or trigger 2FA prompts.
