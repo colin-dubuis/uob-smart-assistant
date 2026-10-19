@@ -1,3 +1,39 @@
+// ── codeurjc/outlook-scraper strategy: intercept real Bearer tokens from live Outlook requests ──
+// Mirrors browser.ts from https://github.com/codeurjc/outlook-scraper which uses
+// Playwright's page.on("request") to sniff the Authorization header on service.svc calls.
+// Here we achieve the same via chrome.webRequest.onBeforeSendHeaders.
+let _outlookToken = null;
+let _outlookAnchorMailbox = null;
+let _outlookServiceBase = null;
+let _outlookTokenCapturedAt = null;
+
+const OUTLOOK_SERVICE_SVC_PATTERNS = [
+  "*://outlook.office.com/owa/service.svc*",
+  "*://outlook.cloud.microsoft/owa/service.svc*",
+  "*://outlook.office365.com/owa/service.svc*"
+];
+
+chrome.webRequest.onBeforeSendHeaders.addListener(
+  (details) => {
+    try {
+      const url = new URL(details.url);
+      if (!url.pathname.includes("service.svc")) return;
+      const headers = details.requestHeaders || [];
+      const authHeader = headers.find(h => h.name.toLowerCase() === "authorization");
+      const anchorHeader = headers.find(h => h.name.toLowerCase() === "x-anchormailbox");
+      if (authHeader && authHeader.value && authHeader.value.startsWith("Bearer ")) {
+        _outlookToken = authHeader.value; // full "Bearer eyJ..." string
+        _outlookAnchorMailbox = anchorHeader ? anchorHeader.value : null;
+        _outlookServiceBase = `${url.origin}/owa/service.svc`;
+        _outlookTokenCapturedAt = Date.now();
+        console.log("[SW] Captured Outlook Bearer token from live request to", details.url);
+      }
+    } catch (e) {}
+  },
+  { urls: OUTLOOK_SERVICE_SVC_PATTERNS },
+  ["requestHeaders"]
+);
+
 // ── Built-in portal targets ──
 const BUILTIN_TARGETS = [
   {
@@ -309,5 +345,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .then(items => sendResponse({ success: true, items }))
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true; // Keep message channel open for async response
+  }
+
+  // ── Expose captured Outlook Bearer token to content scripts ──
+  // This is the codeurjc/outlook-scraper approach: the background intercepted
+  // the token from a real live service.svc request; now hand it to the content script.
+  if (request.action === "get_outlook_token") {
+    // Token is valid for ~1 hour; treat as stale after 55 minutes
+    const AGE_LIMIT_MS = 55 * 60 * 1000;
+    const isStale = _outlookTokenCapturedAt
+      ? (Date.now() - _outlookTokenCapturedAt) > AGE_LIMIT_MS
+      : true;
+    sendResponse({
+      token: isStale ? null : _outlookToken,
+      anchorMailbox: isStale ? null : _outlookAnchorMailbox,
+      serviceBase: isStale ? null : _outlookServiceBase,
+      capturedAt: _outlookTokenCapturedAt
+    });
+    return false;
   }
 });

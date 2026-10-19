@@ -11,61 +11,55 @@
   ];
 
   // ══════════════════════════════════════════════════════════════════════════
-  // STRATEGY 1: OWA FindItem JSON API (Fastest if session token is available)
+  // STRATEGY 1: OWA FindItem JSON API
+  // Token is obtained from the background service worker which intercepts real
+  // Outlook service.svc requests via chrome.webRequest.onBeforeSendHeaders —
+  // exactly as codeurjc/outlook-scraper does via Playwright's page.on("request").
   // ══════════════════════════════════════════════════════════════════════════
 
-  function findMsalToken() {
-    for (const storage of [window.sessionStorage, window.localStorage]) {
+  function getTokenFromBackground() {
+    return new Promise(resolve => {
       try {
-        if (!storage) continue;
-        for (let i = 0; i < storage.length; i++) {
-          const key = storage.key(i);
-          if (!key) continue;
-          const val = storage.getItem(key);
-          if (!val) continue;
-
-          // Check if MSAL token object in JSON
-          if (val.includes("secret") || val.includes("accessToken") || val.includes("access_token")) {
-            try {
-              const parsed = JSON.parse(val);
-              const token = parsed.secret || parsed.accessToken || parsed.access_token || parsed.token;
-              if (token && typeof token === "string" && token.startsWith("ey") && token.length > 80) {
-                return token;
-              }
-            } catch (e) {}
+        chrome.runtime.sendMessage({ action: "get_outlook_token" }, response => {
+          if (chrome.runtime.lastError) {
+            resolve({ token: null, anchorMailbox: null, serviceBase: null });
+          } else {
+            resolve(response || { token: null, anchorMailbox: null, serviceBase: null });
           }
-
-          // Check if raw JWT string
-          if (typeof val === "string" && val.startsWith("ey") && val.length > 150) {
-            return val;
-          }
-        }
-      } catch (e) {}
-    }
-    return null;
+        });
+      } catch (e) {
+        resolve({ token: null, anchorMailbox: null, serviceBase: null });
+      }
+    });
   }
 
   async function tryOwaFindItemApi() {
     try {
-      const token = findMsalToken();
+      const { token, anchorMailbox, serviceBase } = await getTokenFromBackground();
       if (!token) {
-        // Without an observed token, OWA service.svc rejects unauthenticated JSON requests
+        // Background hasn't intercepted a service.svc request yet.
+        // This happens when Outlook hasn't made any API calls since the SW started.
+        // DOM fallback will handle it.
+        console.log("[Outlook Scraper] No Bearer token captured yet by background — falling back to DOM");
         return null;
       }
 
-      console.log("[Outlook Scraper] Attempting OWA FindItem API with detected MSAL token...");
+      console.log("[Outlook Scraper] Got Bearer token from background (codeurjc strategy) — calling FindItem API...");
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
       const origin = window.location.origin.startsWith("http") ? window.location.origin : "https://outlook.office.com";
-      const url = `${origin}/owa/service.svc?action=FindItem&app=Mail`;
+      const url = serviceBase
+        ? `${serviceBase}?action=FindItem&app=Mail`
+        : `${origin}/owa/service.svc?action=FindItem&app=Mail`;
 
       const headers = {
         "Content-Type": "application/json; charset=utf-8",
         "Action": "FindItem",
-        "Authorization": `Bearer ${token}`,
+        "Authorization": token,  // already includes "Bearer " prefix
         "Prefer": 'IdType="ImmutableId", exchange.behavior="IncludeThirdPartyOnlineMeetingProviders"'
       };
+      if (anchorMailbox) headers["X-AnchorMailbox"] = anchorMailbox;
 
       const requestPayload = {
         __type: "FindItemJsonRequest:#Exchange",
@@ -123,6 +117,7 @@
       clearTimeout(timeoutId);
 
       if (!resp.ok) {
+        console.log(`[Outlook Scraper] FindItem API returned ${resp.status} — will use DOM fallback`);
         return null;
       }
 
@@ -471,8 +466,50 @@
   // MAIN ENTRY POINT: Orchestrate OWA API + DOM Fallback
   // ══════════════════════════════════════════════════════════════════════════
 
+  // Warm-up: Issue a minimal authenticated Outlook service.svc call so that
+  // the background webRequest interceptor can capture the Bearer token.
+  // This mirrors the codeurjc/outlook-scraper approach: once the browser
+  // sends any authenticated request to service.svc, the background has the token.
+  async function triggerTokenCapture() {
+    try {
+      const origin = window.location.origin.startsWith("http") ? window.location.origin : "https://outlook.office.com";
+      // A lightweight FindFolder call — succeeds with session cookies, no explicit auth header needed here;
+      // the browser automatically attaches the Authorization header which the SW intercepts.
+      await fetch(`${origin}/owa/service.svc?action=FindFolder&app=Mail`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Action": "FindFolder"
+        },
+        body: JSON.stringify({
+          __type: "FindFolderJsonRequest:#Exchange",
+          Header: {
+            __type: "JsonRequestHeaders:#Exchange",
+            RequestServerVersion: "V2018_01_08"
+          },
+          Body: {
+            __type: "FindFolderRequest:#Exchange",
+            FolderShape: { __type: "FolderResponseShape:#Exchange", BaseShape: "IdOnly" },
+            ParentFolderIds: [{ __type: "DistinguishedFolderId:#Exchange", Id: "msgfolderroot" }],
+            Traversal: "Shallow"
+          }
+        })
+      });
+      console.log("[Outlook Scraper] Warm-up request sent — background may now have captured Bearer token");
+    } catch (e) {
+      // Ignore — this is just a trigger, not required for DOM fallback
+    }
+  }
+
   async function crawlOutlookData() {
     console.log("[Outlook Scraper] Starting Outlook extraction...");
+
+    // Trigger a real Outlook request so the background webRequest interceptor
+    // can capture the Bearer token (codeurjc strategy)
+    await triggerTokenCapture();
+    // Small wait for the background SW to process the intercepted request
+    await sleep(400);
 
     // 1. Try OWA FindItem API first (fastest if token available)
     try {
