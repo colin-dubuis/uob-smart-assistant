@@ -9,14 +9,23 @@ An intelligent, local-first Chromium extension that eliminates student notificat
 ## 🎬 Product Demo in Action
 
 <div align="center">
-  <video src="https://github.com/colin-dubuis/uob-smart-assistant/releases/download/v1.4.0/demo.mp4" controls="controls" width="100%" style="max-width: 820px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15);">
-    <a href="https://github.com/colin-dubuis/uob-smart-assistant/releases/download/v1.4.0/demo.mp4">
-      <img src="assets/demo-thumbnail.png" alt="UoB Smart Assistant Demo Video Preview" width="100%" style="max-width: 820px; border-radius: 8px;" />
+
+  <!-- Autoplaying live preview (zero clicks needed) -->
+  <img src="assets/demo.gif" alt="UoB Smart Assistant Live Demo Preview" width="100%" style="max-width: 820px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15);" />
+
+  <br/><br/>
+
+  <!-- Full interactive video player with controls -->
+  <video src="https://github.com/user-attachments/assets/c96bbea6-08fd-43e8-ade1-79a28d3230c8" controls="controls" width="100%" style="max-width: 820px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15);">
+    <a href="https://github.com/user-attachments/assets/c96bbea6-08fd-43e8-ade1-79a28d3230c8">
+      <img src="assets/demo-thumbnail.png" alt="Watch Full HD Walkthrough" width="100%" style="max-width: 820px; border-radius: 8px;" />
     </a>
   </video>
+
   <p align="center">
-    <sub><em>▶️ Click above to play the live demonstration (1080p, H.264 web-optimized). Direct link: <a href="https://github.com/colin-dubuis/uob-smart-assistant/releases/download/v1.4.0/demo.mp4">demo.mp4</a></em></sub>
+    <sub><em>▶️ Above: Instant autoplay preview. Below: Full HD walkthrough (1 min 43s) with native player controls.</em></sub>
   </p>
+
 </div>
 
 ---
@@ -296,6 +305,7 @@ The extension automatically connects to LM Studio running on your local machine:
 ├── icons/
 │   └── icon128.png                # Official extension icon
 ├── assets/
+│   ├── demo.gif                   # Autoplaying looping demo preview (1.2MB)
 │   ├── demo.mp4                   # Web-optimized product demo video (H.264)
 │   └── demo-thumbnail.png         # High-resolution video preview poster
 ├── backend-processor.js           # Companion Node.js CLI data processor
