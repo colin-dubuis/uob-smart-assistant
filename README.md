@@ -6,16 +6,32 @@ An intelligent, local-first Chromium extension that eliminates student notificat
 
 ---
 
+## 🎬 Product Demo in Action
+
+<div align="center">
+  <video src="https://github.com/colin-dubuis/uob-smart-assistant/releases/download/v1.4.0/demo.mp4" controls="controls" width="100%" style="max-width: 820px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.15);">
+    <a href="https://github.com/colin-dubuis/uob-smart-assistant/releases/download/v1.4.0/demo.mp4">
+      <img src="assets/demo-thumbnail.png" alt="UoB Smart Assistant Demo Video Preview" width="100%" style="max-width: 820px; border-radius: 8px;" />
+    </a>
+  </video>
+  <p align="center">
+    <sub><em>▶️ Click above to play the live demonstration (1080p, H.264 web-optimized). Direct link: <a href="https://github.com/colin-dubuis/uob-smart-assistant/releases/download/v1.4.0/demo.mp4">demo.mp4</a></em></sub>
+  </p>
+</div>
+
+---
+
 ## 📑 Table of Contents
-1. [The Problem: Student Notification Fatigue](#-the-problem-student-notification-fatigue)
-2. [What the Extension Does](#-what-the-extension-does)
-3. [Architecture & Data Flow](#-architecture--data-flow)
-4. [Our Iterative Engineering Journey](#-our-iterative-engineering-journey)
-5. [Key Technical Challenges & How We Solved Them](#-key-technical-challenges--how-we-solved-them)
-6. [How the Extension Could Be Improved (Future Roadmap)](#-how-the-extension-could-be-improved-future-roadmap)
-7. [Installation & Quick Start](#-installation--quick-start)
-8. [Running the Local AI Engine](#-running-the-local-ai-engine)
-9. [Project Structure](#-project-structure)
+1. [Product Demo in Action](#-product-demo-in-action)
+2. [The Problem: Student Notification Fatigue](#-the-problem-student-notification-fatigue)
+3. [What the Extension Does](#-what-the-extension-does)
+4. [Architecture & Data Flow](#-architecture--data-flow)
+5. [Our Iterative Engineering Journey](#-our-iterative-engineering-journey)
+6. [Key Technical Challenges & How We Solved Them](#-key-technical-challenges--how-we-solved-them)
+7. [How the Extension Could Be Improved (Future Roadmap)](#-how-the-extension-could-be-improved-future-roadmap)
+8. [Installation & Quick Start](#-installation--quick-start)
+9. [Running the Local AI Engine](#-running-the-local-ai-engine)
+10. [Project Structure](#-project-structure)
 
 ---
 
@@ -279,6 +295,9 @@ The extension automatically connects to LM Studio running on your local machine:
 │   └── intelligence.js            # LM Studio controller (Gemma 4) + algorithmic heuristic engine
 ├── icons/
 │   └── icon128.png                # Official extension icon
+├── assets/
+│   ├── demo.mp4                   # Web-optimized product demo video (H.264)
+│   └── demo-thumbnail.png         # High-resolution video preview poster
 ├── backend-processor.js           # Companion Node.js CLI data processor
 └── test/
     └── backend-processor.test.js  # Automated unit tests (Run via: node --test)
