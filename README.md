@@ -217,10 +217,7 @@ While the hackathon prototype won 1st place, several enhancements would make it 
 1. Clone or download this repository.
 2. Open Google Chrome and navigate to `chrome://extensions`.
 3. Enable **Developer mode** in the upper-right corner.
-4. Click **Load unpacked** and select this project's root folder:
-   ```
-   /Users/colindubuis/Documents/ZHAW/7th semester (Birmingham)/BuilderSocity
-   ```
+4. Click **Load unpacked** and select this project
 5. Pin the **UoB Assistant** icon to your browser toolbar.
 
 ### 2. Using the Dashboard
@@ -276,13 +273,4 @@ The extension automatically connects to LM Studio running on your local machine:
 ```
 
 ---
-
-## 👥 The Team
-
-Created by:
-- **Colin Dubuis** ([GitHub](https://github.com/dubuisc) / ZHAW & University of Birmingham)
-- **Omkar Munde** ([GitHub](https://github.com/omkarjmunde))
-- **Joul Mansour** ([GitHub](https://github.com/JoulMansour))
-- **Eric** ([GitHub](https://github.com/TTEric-6))
-
 Special thanks to **Accenture**, **Builders Club**, and **Ayomide** for organizing the hackathon and providing the challenge brief!
