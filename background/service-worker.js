@@ -2,16 +2,35 @@
 // Mirrors browser.ts from https://github.com/codeurjc/outlook-scraper which uses
 // Playwright's page.on("request") to sniff the Authorization header on service.svc calls.
 // Here we achieve the same via chrome.webRequest.onBeforeSendHeaders.
+// NOTE: "extraHeaders" is REQUIRED by Chrome to expose the Authorization header.
 let _outlookToken = null;
 let _outlookAnchorMailbox = null;
 let _outlookServiceBase = null;
 let _outlookTokenCapturedAt = null;
 
 const OUTLOOK_SERVICE_SVC_PATTERNS = [
-  "*://outlook.office.com/owa/service.svc*",
-  "*://outlook.cloud.microsoft/owa/service.svc*",
-  "*://outlook.office365.com/owa/service.svc*"
+  "*://outlook.office.com/*service.svc*",
+  "*://outlook.cloud.microsoft/*service.svc*",
+  "*://outlook.office365.com/*service.svc*",
+  "*://outlook.live.com/*service.svc*",
+  "*://*.office.com/*service.svc*",
+  "*://*.cloud.microsoft/*service.svc*"
 ];
+
+// Hydrate auth cache on service worker startup
+chrome.storage.local.get(["_outlookAuth"]).then(res => {
+  if (res?._outlookAuth) {
+    const auth = res._outlookAuth;
+    const AGE_LIMIT_MS = 55 * 60 * 1000;
+    if (auth.timestamp && (Date.now() - auth.timestamp) < AGE_LIMIT_MS) {
+      _outlookToken = auth.token;
+      _outlookAnchorMailbox = auth.anchorMailbox;
+      _outlookServiceBase = auth.serviceBase;
+      _outlookTokenCapturedAt = auth.timestamp;
+      console.log("[SW] Hydrated Outlook auth token from storage cache");
+    }
+  }
+}).catch(() => {});
 
 chrome.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
@@ -27,11 +46,21 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
         _outlookServiceBase = `${url.origin}/owa/service.svc`;
         _outlookTokenCapturedAt = Date.now();
         console.log("[SW] Captured Outlook Bearer token from live request to", details.url);
+
+        // Persist so MV3 service worker restarts don't lose the token
+        chrome.storage.local.set({
+          _outlookAuth: {
+            token: _outlookToken,
+            anchorMailbox: _outlookAnchorMailbox,
+            serviceBase: _outlookServiceBase,
+            timestamp: _outlookTokenCapturedAt
+          }
+        }).catch(() => {});
       }
     } catch (e) {}
   },
   { urls: OUTLOOK_SERVICE_SVC_PATTERNS },
-  ["requestHeaders"]
+  ["requestHeaders", "extraHeaders"]
 );
 
 // ── Built-in portal targets ──
@@ -156,8 +185,8 @@ async function crawlTab(target) {
         chrome.tabs.onUpdated.addListener(listener);
       });
 
-      // Extra hydration delay for SPAs
-      const hydrationTime = target.source === "outlook" ? 4000 : 1500;
+      // Extra hydration delay for SPAs (Outlook needs enough time to fire its service.svc auth burst)
+      const hydrationTime = target.source === "outlook" ? 6000 : 1500;
       await wait(hydrationTime);
     }
 
@@ -351,17 +380,38 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // This is the codeurjc/outlook-scraper approach: the background intercepted
   // the token from a real live service.svc request; now hand it to the content script.
   if (request.action === "get_outlook_token") {
-    // Token is valid for ~1 hour; treat as stale after 55 minutes
     const AGE_LIMIT_MS = 55 * 60 * 1000;
-    const isStale = _outlookTokenCapturedAt
-      ? (Date.now() - _outlookTokenCapturedAt) > AGE_LIMIT_MS
-      : true;
-    sendResponse({
-      token: isStale ? null : _outlookToken,
-      anchorMailbox: isStale ? null : _outlookAnchorMailbox,
-      serviceBase: isStale ? null : _outlookServiceBase,
-      capturedAt: _outlookTokenCapturedAt
-    });
-    return false;
+    const fetchValidAuth = async () => {
+      if (_outlookToken && _outlookTokenCapturedAt && (Date.now() - _outlookTokenCapturedAt) < AGE_LIMIT_MS) {
+        return {
+          token: _outlookToken,
+          anchorMailbox: _outlookAnchorMailbox,
+          serviceBase: _outlookServiceBase,
+          capturedAt: _outlookTokenCapturedAt
+        };
+      }
+      try {
+        const stored = await chrome.storage.local.get(["_outlookAuth"]);
+        if (stored?._outlookAuth?.token) {
+          const auth = stored._outlookAuth;
+          if (auth.timestamp && (Date.now() - auth.timestamp) < AGE_LIMIT_MS) {
+            _outlookToken = auth.token;
+            _outlookAnchorMailbox = auth.anchorMailbox;
+            _outlookServiceBase = auth.serviceBase;
+            _outlookTokenCapturedAt = auth.timestamp;
+            return {
+              token: auth.token,
+              anchorMailbox: auth.anchorMailbox,
+              serviceBase: auth.serviceBase,
+              capturedAt: auth.timestamp
+            };
+          }
+        }
+      } catch (e) {}
+      return { token: null, anchorMailbox: null, serviceBase: null, capturedAt: null };
+    };
+
+    fetchValidAuth().then(result => sendResponse(result));
+    return true; // Keep channel open for async response
   }
 });

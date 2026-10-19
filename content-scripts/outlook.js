@@ -55,12 +55,15 @@
 
       const headers = {
         "Content-Type": "application/json; charset=utf-8",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
         "Action": "FindItem",
-        "Authorization": token,  // already includes "Bearer " prefix
-        "Prefer": 'IdType="ImmutableId", exchange.behavior="IncludeThirdPartyOnlineMeetingProviders"'
+        "Authorization": token, // full "Bearer <token>"
+        "Prefer": 'IdType="ImmutableId", exchange.behavior="IncludeThirdPartyOnlineMeetingProviders"',
+        "X-Requested-With": "XMLHttpRequest"
       };
       if (anchorMailbox) headers["X-AnchorMailbox"] = anchorMailbox;
 
+      // Reconciled directly against codeurjc/outlook-scraper (src/actions/items.ts & ews.ts)
       const requestPayload = {
         __type: "FindItemJsonRequest:#Exchange",
         Header: {
@@ -80,10 +83,15 @@
             __type: "ItemResponseShape:#Exchange",
             BaseShape: "IdOnly",
             AdditionalProperties: [
-              { __type: "PropertyUri:#Exchange", FieldURI: "ItemSubject" },
-              { __type: "PropertyUri:#Exchange", FieldURI: "ItemDateTimeReceived" },
-              { __type: "PropertyUri:#Exchange", FieldURI: "MessageSender" },
-              { __type: "PropertyUri:#Exchange", FieldURI: "ItemPreview" }
+              { __type: "PropertyUri:#Exchange", FieldURI: "item:Subject" },
+              { __type: "PropertyUri:#Exchange", FieldURI: "item:DateTimeReceived" },
+              { __type: "PropertyUri:#Exchange", FieldURI: "item:DateTimeSent" },
+              { __type: "PropertyUri:#Exchange", FieldURI: "item:Size" },
+              { __type: "PropertyUri:#Exchange", FieldURI: "item:HasAttachments" },
+              { __type: "PropertyUri:#Exchange", FieldURI: "message:From" },
+              { __type: "PropertyUri:#Exchange", FieldURI: "message:Sender" },
+              { __type: "PropertyUri:#Exchange", FieldURI: "message:IsRead" },
+              { __type: "PropertyUri:#Exchange", FieldURI: "item:Preview" }
             ]
           },
           ParentFolderIds: [
@@ -100,7 +108,7 @@
             {
               __type: "SortResults:#Exchange",
               Order: "Descending",
-              Path: { __type: "PropertyUri:#Exchange", FieldURI: "ItemDateTimeReceived" }
+              Path: { __type: "PropertyUri:#Exchange", FieldURI: "item:DateTimeReceived" }
             }
           ]
         }
@@ -130,10 +138,10 @@
         console.log(`[Outlook Scraper] OWA FindItem API successfully retrieved ${itemsContainer.length} items!`);
 
         return itemsContainer.map((item, idx) => {
-          const subject = clean(item.Subject || item.ItemSubject || "Outlook Message");
-          const senderObj = item.Sender?.Mailbox || item.MessageSender?.Mailbox || {};
-          const sender = clean(senderObj.Name || senderObj.EmailAddress || "Outlook Sender");
-          const dateStr = item.DateTimeReceived || item.ItemDateTimeReceived || new Date().toISOString();
+          const subject = clean(item.Subject || item.ItemSubject || "(no subject)");
+          const mbx = item.From?.Mailbox || item.Sender?.Mailbox || item.From || item.Sender || item.MessageSender?.Mailbox || {};
+          const sender = clean(mbx.Name || mbx.EmailAddress || "Outlook Sender");
+          const dateStr = item.DateTimeReceived || item.DateTimeSent || item.ItemDateTimeReceived || new Date().toISOString();
           const snippet = clean(item.Preview || item.ItemPreview || "").slice(0, 180);
           const itemId = item.ItemId?.Id || `item-${idx}`;
 
