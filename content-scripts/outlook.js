@@ -1,4 +1,5 @@
 (() => {
+
   const clean = text => (text || "").replace(/\s+/g, " ").trim();
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -6,13 +7,11 @@
     "deadline", "due", "submission", "assignment", "exam",
     "compulsory", "urgent", "important", "cancelled", "rescheduled",
     "reminder", "assessment", "coursework", "room", "feedback", "grade",
-    "lecture", "seminar", "workshop", "dissertation", "quiz"
+    "lecture", "seminar", "workshop", "dissertation", "quiz", "pizza"
   ];
 
   // ══════════════════════════════════════════════════════════════════════════
-  // STRATEGY 1: OWA FindItem API (from codeurjc/outlook-scraper)
-  // Calls the internal EWS-over-JSON endpoint used natively by Outlook Web:
-  // POST /owa/service.svc?action=FindItem&app=Mail
+  // STRATEGY 1: OWA FindItem JSON API (Fastest if session token is available)
   // ══════════════════════════════════════════════════════════════════════════
 
   function findMsalToken() {
@@ -48,21 +47,26 @@
 
   async function tryOwaFindItemApi() {
     try {
-      console.log("[Outlook Scraper] Attempting OWA FindItem API (codeurjc strategy)...");
       const token = findMsalToken();
-      const origin = window.location.origin;
+      if (!token) {
+        // Without an observed token, OWA service.svc rejects unauthenticated JSON requests
+        return null;
+      }
+
+      console.log("[Outlook Scraper] Attempting OWA FindItem API with detected MSAL token...");
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+      const origin = window.location.origin.startsWith("http") ? window.location.origin : "https://outlook.office.com";
       const url = `${origin}/owa/service.svc?action=FindItem&app=Mail`;
 
       const headers = {
         "Content-Type": "application/json; charset=utf-8",
         "Action": "FindItem",
+        "Authorization": `Bearer ${token}`,
         "Prefer": 'IdType="ImmutableId", exchange.behavior="IncludeThirdPartyOnlineMeetingProviders"'
       };
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
 
-      // EWS over JSON request payload from codeurjc/outlook-scraper
       const requestPayload = {
         __type: "FindItemJsonRequest:#Exchange",
         Header: {
@@ -112,11 +116,13 @@
         method: "POST",
         credentials: "include",
         headers,
-        body: JSON.stringify(requestPayload)
+        body: JSON.stringify(requestPayload),
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
       if (!resp.ok) {
-        console.log(`[Outlook Scraper] OWA API returned HTTP ${resp.status}, falling back to DOM`);
         return null;
       }
 
@@ -139,7 +145,6 @@
           const fullText = `${subject} ${sender} ${snippet}`.toLowerCase();
           const matched = DEFAULT_KEYWORDS.filter(kw => fullText.includes(kw));
 
-          const baseOrigin = window.location.origin?.startsWith("http") ? window.location.origin : "https://outlook.office.com";
           return {
             id: `outlook-api-${idx + 1}-${Math.random().toString(36).slice(2, 6)}`,
             title: subject,
@@ -148,50 +153,64 @@
             date: dateStr,
             sender: sender,
             snippet: snippet,
-            url: `${baseOrigin}/mail/id/${encodeURIComponent(itemId)}`,
+            url: `${origin}/mail/id/${encodeURIComponent(itemId)}`,
             isUrgent: matched.length > 0,
             matchedKeywords: matched
           };
         });
       }
     } catch (err) {
-      console.log("[Outlook Scraper] OWA API error, falling back to DOM:", err.message);
+      console.log("[Outlook Scraper] OWA API skipped or timed out:", err.message);
     }
     return null;
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // STRATEGY 2: Robust DOM Virtual List Crawler (Fixed)
-  // Targets individual message rows without mistakenly capturing list wrappers.
+  // STRATEGY 2: Multi-Selector DOM Virtual List Crawler (Ultra-Resilient)
   // ══════════════════════════════════════════════════════════════════════════
 
   function getMessageRowElements() {
-    // Specific item selectors (never match outer feed/list containers)
-    const specificSelectors = [
-      'div[data-convid]',
-      'div[role="option"]',
-      'div[role="listitem"]',
-      'div[draggable="true"][data-is-focusable="true"]',
+    const candidateSelectors = [
+      '[data-convid]',
+      '[data-item-id]',
+      '[data-legacyitemid]',
+      '[role="row"]',
+      '[role="option"]',
+      '[role="listitem"]',
+      '[data-testid*="message-list-item"]',
+      '[data-testid*="mailListItem"]',
+      'div[draggable="true"][aria-label]',
+      'div[data-is-focusable="true"][aria-label*=","]',
       'div[data-selection-index]',
       'div[data-item-index]'
     ];
 
-    const elements = document.querySelectorAll(specificSelectors.join(", "));
+    const elements = document.querySelectorAll(candidateSelectors.join(", "));
     const rows = [];
     const seen = new Set();
 
     for (const el of elements) {
-      // Exclude outer wrappers
+      // Exclude outer wrappers and containers
       const role = el.getAttribute("role");
-      if (role === "feed" || role === "listbox" || role === "region" || role === "treegrid") continue;
+      if (role === "feed" || role === "listbox" || role === "region" || role === "treegrid" || role === "grid" || role === "toolbar" || role === "menu" || role === "menubar") continue;
 
       const ariaLabel = el.getAttribute("aria-label") || "";
-      if (/^(message list|conversation list|messages|reading pane)$/i.test(ariaLabel)) continue;
+      if (/^(message list|conversation list|messages|reading pane|navigation pane|folders)$/i.test(ariaLabel)) continue;
 
+      // Exclude small buttons or toolbar items
       const text = clean(el.innerText || "");
-      if (text.length < 5 && ariaLabel.length < 5) continue;
+      if (text.length < 5 && ariaLabel.length < 8) continue;
 
-      // Deduplicate by element reference
+      // Prevent nested duplicate row elements (e.g., inner focusable div inside an outer role="row")
+      let isNested = false;
+      for (const existing of rows) {
+        if (existing.contains(el)) {
+          isNested = true;
+          break;
+        }
+      }
+      if (isNested) continue;
+
       if (!seen.has(el)) {
         seen.add(el);
         rows.push(el);
@@ -204,28 +223,31 @@
   function findScrollContainer() {
     const listSelectors = [
       '[data-app-section="ConversationList"]',
+      '[data-app-section="MailList"]',
       '[role="feed"]',
       '[role="listbox"]',
+      '[role="treegrid"]',
+      '[role="grid"]',
       'div[aria-label*="Message list" i]',
       'div[aria-label*="Conversation list" i]',
+      'div[aria-label*="Messages" i]',
       'div[class*="customScrollBar" i]'
     ];
 
     for (const sel of listSelectors) {
       const el = document.querySelector(sel);
-      if (el && el.scrollHeight > el.clientHeight) return el;
+      if (el && el.scrollHeight > el.clientHeight + 10) return el;
     }
 
-    // Traverse upwards from first message row
+    // Traverse upwards from first message row to find scrollable ancestor
     const rows = getMessageRowElements();
     if (rows.length > 0) {
       let p = rows[0].parentElement;
-      while (p && p !== document.body) {
+      while (p && p !== document.body && p !== document.documentElement) {
         try {
           const style = window.getComputedStyle(p);
-          if ((style.overflowY === "auto" || style.overflowY === "scroll") && p.scrollHeight > p.clientHeight + 10) {
-            return p;
-          }
+          const hasScroll = (style.overflowY === "auto" || style.overflowY === "scroll") && p.scrollHeight > p.clientHeight + 20;
+          if (hasScroll) return p;
         } catch (e) {}
         p = p.parentElement;
       }
@@ -234,80 +256,94 @@
     return window;
   }
 
-  function parseAriaLabel(label) {
-    if (!label || label.length < 6) return null;
+  function parseRowFromDom(row, index) {
+    if (!row) return null;
 
-    let sender = "";
+    // 1. Check aria-label on the row or its primary child
+    const ariaLabel = row.getAttribute("aria-label") ||
+                      row.querySelector("[aria-label]")?.getAttribute("aria-label") || "";
+
     let subject = "";
+    let sender = "";
     let dateStr = "";
     let snippet = "";
 
-    const fromMatch = label.match(/(?:from|sender)[:\s]+([^,;]+)/i);
-    const subjectMatch = label.match(/(?:subject)[:\s]+([^,;]+)/i);
-    const dateMatch = label.match(/(?:received|date|sent)[:\s]+([^,;]+)/i);
-    const previewMatch = label.match(/(?:preview|body|snippet)[:\s]+(.+)/i);
-
-    if (fromMatch) sender = clean(fromMatch[1]);
-    if (subjectMatch) subject = clean(subjectMatch[1]);
-    if (dateMatch) dateStr = clean(dateMatch[1]);
-    if (previewMatch) snippet = clean(previewMatch[1]);
-
-    if (!subject || !sender) {
-      const parts = label.split(/[,;]\s*/).map(clean).filter(p => {
-        return !/^(unread|read|flagged|pinned|high priority|selected|attachment|has attachment)$/i.test(p);
-      });
+    // Parse aria-label if present and informative
+    if (ariaLabel && ariaLabel.length > 8) {
+      // Split on separators: commas, semicolons, middle dots, vertical bars
+      const rawParts = ariaLabel.split(/[,;·•|\n]\s*/).map(clean).filter(Boolean);
+      const noise = /^(unread|read|flagged|pinned|high priority|low priority|selected|attachment|has attachment|has attachments|replied|forwarded|categorized)$/i;
+      const parts = rawParts.filter(p => !noise.test(p));
 
       if (parts.length >= 2) {
-        sender = sender || parts[0];
-        subject = subject || parts[1];
+        sender = parts[0];
+        subject = parts[1];
         if (parts.length >= 3) {
-          if (/\b(\d{1,2}:\d{2}|\d{1,2}\/\d{1,2}|yesterday|today|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(parts[2])) {
-            dateStr = dateStr || parts[2];
-            snippet = snippet || parts.slice(3).join(" - ");
+          // Check if part 2 is a date/time or snippet
+          if (/\b(\d{1,2}:\d{2}|\d{1,2}[\/\-\.]\d{1,2}|yesterday|today|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(parts[2])) {
+            dateStr = parts[2];
+            snippet = parts.slice(3).join(" - ");
           } else {
-            snippet = snippet || parts.slice(2).join(" - ");
+            snippet = parts.slice(2).join(" - ");
           }
         }
       }
     }
 
-    if (subject) {
-      return { sender: sender || "Outlook", subject, date: dateStr, snippet };
-    }
-    return null;
-  }
-
-  function parseRowFromDom(row, index) {
-    const ariaData = parseAriaLabel(row.getAttribute("aria-label"));
-
+    // 2. DOM extraction fallback / enrichment
     const rawText = clean(row.innerText || "");
-    const lines = row.innerText.split("\n").map(clean).filter(Boolean);
-    const noiseWords = /^(selected|pinned|flagged|has attachments|unread|read|high priority)$/i;
-    const cleanLines = lines.filter(l => !noiseWords.test(l));
+    const lines = (row.innerText || "").split("\n").map(clean).filter(Boolean);
+    const noise = /^(unread|read|flagged|pinned|high priority|low priority|selected|attachment|has attachment|has attachments|replied|forwarded)$/i;
+    const cleanLines = lines.filter(l => !noise.test(l));
 
-    // Try finding dedicated subject & sender elements
-    const subjectEl = row.querySelector(
-      '[data-subject], span[style*="font-weight: 600"], span[style*="font-weight: 700"], span[style*="font-weight: bold"], h2, h3'
-    );
-    const domSubject = clean(subjectEl?.innerText) || cleanLines[1] || cleanLines[0];
+    // Subject
+    if (!subject || subject.length < 2) {
+      const subjectEl = row.querySelector(
+        '[data-subject], [id^="subject_"], [class*="subject" i], [data-testid*="subject" i], h2, h3, span[style*="font-weight"], [class*="bold" i]'
+      );
+      subject = clean(subjectEl?.innerText) || cleanLines[1] || cleanLines[0];
+    }
 
-    const senderEl = row.querySelector('.ms-Persona-primaryText, [class*="Sender" i], [class*="from" i]');
-    const domSender = clean(senderEl?.innerText) || cleanLines[0] || "Outlook Sender";
+    // Sender
+    if (!sender || sender.length < 2) {
+      const senderEl = row.querySelector(
+        '.ms-Persona-primaryText, [class*="Persona" i], [class*="Sender" i], [class*="from" i], [data-testid*="sender" i], [data-testid*="from" i]'
+      );
+      sender = clean(senderEl?.innerText) || cleanLines[0] || "Outlook";
+    }
 
-    const subject = ariaData?.subject || domSubject;
-    const sender = ariaData?.sender || domSender;
-    const dateStr = ariaData?.date || cleanLines[2] || new Date().toISOString();
-    const snippet = ariaData?.snippet || cleanLines.slice(2, 5).join(" - ") || rawText.slice(0, 160);
+    // Date
+    if (!dateStr) {
+      const timeEl = row.querySelector("time, [datetime], [class*='date' i], [class*='time' i]");
+      dateStr = timeEl ? (timeEl.getAttribute("datetime") || clean(timeEl.innerText)) : null;
+      if (!dateStr && cleanLines.length >= 3) {
+        const dateMatch = rawText.match(/\b(\d{1,2}:\d{2}(?:\s*[ap]m)?|\d{1,2}[\/\-\.]\d{1,2}(?:[\/\-\.]\d{2,4})?|yesterday|today|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2})\b/i);
+        dateStr = dateMatch ? dateMatch[0] : null;
+      }
+      if (!dateStr) dateStr = new Date().toISOString();
+    }
+
+    // Snippet
+    if (!snippet || snippet.length < 5) {
+      const snippetEl = row.querySelector('[class*="preview" i], [class*="snippet" i], [data-testid*="preview" i]');
+      snippet = clean(snippetEl?.innerText) || cleanLines.slice(2, 5).join(" - ") || rawText.slice(0, 180);
+    }
 
     if (!subject || subject.length < 2) return null;
 
+    // URL resolution
+    const origin = window.location.origin.startsWith("http") ? window.location.origin : "https://outlook.office.com";
     const convid = row.getAttribute("data-convid") ||
-                   row.getAttribute("data-item-index") ||
-                   row.querySelector("a[href]")?.getAttribute("href");
-    const baseOrigin = window.location.origin?.startsWith("http") ? window.location.origin : "https://outlook.office.com";
-    const emailUrl = convid && convid.startsWith("http")
-      ? convid
-      : (convid ? `${baseOrigin}/mail/id/${encodeURIComponent(convid)}` : `${baseOrigin}/mail/inbox`);
+                   row.getAttribute("data-item-id") ||
+                   row.getAttribute("data-legacyitemid") ||
+                   row.getAttribute("data-item-index");
+    const anchor = row.querySelector("a[href]");
+    let emailUrl = `${origin}/mail/inbox`;
+    if (convid) {
+      emailUrl = `${origin}/mail/id/${encodeURIComponent(convid)}`;
+    } else if (anchor && anchor.href && /^https?:\/\//i.test(anchor.href)) {
+      emailUrl = anchor.href;
+    }
 
     const fullContent = `${subject} ${sender} ${snippet}`.toLowerCase();
     const matched = DEFAULT_KEYWORDS.filter(kw => fullContent.includes(kw));
@@ -319,7 +355,7 @@
       dueDate: null,
       date: dateStr,
       sender: sender,
-      snippet: snippet.slice(0, 180),
+      snippet: snippet.slice(0, 200),
       url: emailUrl,
       isUrgent: matched.length > 0,
       matchedKeywords: matched
@@ -335,7 +371,7 @@
     let rows = getMessageRowElements();
     let attempts = 0;
     while (rows.length === 0 && attempts < 15) {
-      await sleep(400);
+      await sleep(350);
       rows = getMessageRowElements();
       attempts++;
     }
@@ -347,23 +383,29 @@
       return [];
     }
 
+    console.log(`[Outlook Scraper] Detected ${rows.length} visible rows initially`);
+
     let scrolls = 0;
-    while (emailMap.size < TARGET && scrolls < 22) {
+    while (emailMap.size < TARGET && scrolls < 25) {
       const currentRows = getMessageRowElements();
       for (const row of currentRows) {
-        const item = parseRowFromDom(row, emailMap.size);
-        if (!item || !item.title) continue;
+        try {
+          const item = parseRowFromDom(row, emailMap.size);
+          if (!item || !item.title) continue;
 
-        const key = `${item.title.trim().toLowerCase()}|${item.sender.trim().toLowerCase()}`;
-        if (!emailMap.has(key)) {
-          emailMap.set(key, item);
-          if (emailMap.size >= TARGET) break;
+          const key = `${item.title.trim().toLowerCase()}|${item.sender.trim().toLowerCase()}`;
+          if (!emailMap.has(key)) {
+            emailMap.set(key, item);
+            if (emailMap.size >= TARGET) break;
+          }
+        } catch (e) {
+          // Skip individual row parse faults
         }
       }
 
       if (emailMap.size >= TARGET) break;
 
-      // Scroll and dispatch synthetic DOM events
+      // Programmatic scroll + Synthetic DOM Events
       if (scrollContainer === window) {
         window.scrollBy(0, 500);
       } else {
@@ -372,10 +414,18 @@
         scrollContainer.dispatchEvent(new WheelEvent("wheel", { deltaY: 500, bubbles: true }));
       }
 
-      await sleep(400);
+      // Also trigger scrollIntoView on the last visible row to notify React virtualizer
+      if (currentRows.length > 0) {
+        try {
+          currentRows[currentRows.length - 1].scrollIntoView({ block: "end", behavior: "auto" });
+        } catch (e) {}
+      }
+
+      await sleep(350);
       scrolls++;
     }
 
+    console.log(`[Outlook Scraper] DOM scan complete: extracted ${emailMap.size} emails`);
     return Array.from(emailMap.values());
   }
 
@@ -387,27 +437,29 @@
     const main = document.querySelector('[role="main"]') || document.body;
     const fullText = clean(main.innerText || "");
 
-    const subjectHeading = [...main.querySelectorAll("h1, h2, [role=heading]")].find(el => el.innerText);
+    const subjectHeading = [...main.querySelectorAll("h1, h2, [role=heading], [data-subject]")].find(el => clean(el.innerText).length > 2);
     const subject = clean(subjectHeading?.innerText);
 
-    const senderEl = main.querySelector('.ms-Persona-primaryText, [class*="Sender" i], [class*="from" i]');
+    const senderEl = main.querySelector('.ms-Persona-primaryText, [class*="Sender" i], [class*="from" i], [data-testid*="sender" i]');
     const sender = clean(senderEl?.innerText) || "Outlook Sender";
 
     const timeEl = main.querySelector("time, [datetime]");
-    const dateStr = timeEl ? (timeEl.getAttribute("datetime") || timeEl.innerText) : new Date().toISOString();
+    const dateStr = timeEl ? (timeEl.getAttribute("datetime") || clean(timeEl.innerText)) : new Date().toISOString();
 
     const bodyEl = document.querySelector('[data-testid*="message-body" i], [class*="allowTextSelection"], [role="document"]');
     const bodyText = clean(bodyEl?.innerText) || fullText.slice(0, 250);
 
     if (subject && subject.length > 2) {
+      const origin = window.location.origin.startsWith("http") ? window.location.origin : "https://outlook.office.com";
       return {
         id: `outlook-open-${Math.random().toString(36).slice(2, 6)}`,
         title: subject,
         sender: sender,
         date: dateStr,
         snippet: bodyText.slice(0, 180),
-        url: window.location.href,
+        url: window.location.href.startsWith("http") ? window.location.href : `${origin}/mail/inbox`,
         source: "outlook",
+        dueDate: null,
         isUrgent: false,
         matchedKeywords: []
       };
@@ -420,22 +472,42 @@
   // ══════════════════════════════════════════════════════════════════════════
 
   async function crawlOutlookData() {
-    // 1. Try OWA FindItem API first (fastest & most accurate, codeurjc strategy)
-    const apiItems = await tryOwaFindItemApi();
-    if (apiItems && apiItems.length > 0) {
-      return apiItems;
+    console.log("[Outlook Scraper] Starting Outlook extraction...");
+
+    // 1. Try OWA FindItem API first (fastest if token available)
+    try {
+      const apiItems = await tryOwaFindItemApi();
+      if (apiItems && apiItems.length > 0) {
+        console.log(`[Outlook Scraper] API retrieved ${apiItems.length} emails`);
+        return apiItems;
+      }
+    } catch (e) {
+      console.warn("[Outlook Scraper] API attempt skipped:", e.message);
     }
 
-    // 2. Fall back to DOM Crawler
-    const domItems = await crawlOutlookDOM();
-    if (domItems && domItems.length > 0) {
-      return domItems;
+    // 2. DOM Virtual List Crawler (resilient, primary in-browser method)
+    try {
+      const domItems = await crawlOutlookDOM();
+      if (domItems && domItems.length > 0) {
+        console.log(`[Outlook Scraper] DOM crawler retrieved ${domItems.length} emails`);
+        return domItems;
+      }
+    } catch (e) {
+      console.error("[Outlook Scraper] DOM crawler error:", e);
     }
 
-    // 3. Fall back to Reading Pane
-    const openMsg = extractOpenMessage();
-    if (openMsg) return [openMsg];
+    // 3. Fall back to Reading Pane (single opened message)
+    try {
+      const openMsg = extractOpenMessage();
+      if (openMsg) {
+        console.log("[Outlook Scraper] Extracted open message from reading pane");
+        return [openMsg];
+      }
+    } catch (e) {
+      console.warn("[Outlook Scraper] Reading pane fallback error:", e);
+    }
 
+    console.warn("[Outlook Scraper] No emails could be found in DOM or API");
     return [];
   }
 
@@ -531,10 +603,15 @@
   }
   setTimeout(injectFloatingButton, 2000);
 
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "extract_outlook") {
-      crawlOutlookData().then(data => sendResponse({ data }));
-      return true;
-    }
-  });
+  if (!window.__outlookMessageListenerAttached) {
+    window.__outlookMessageListenerAttached = true;
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      if (request.action === "extract_outlook") {
+        crawlOutlookData()
+          .then(data => sendResponse({ data }))
+          .catch(err => sendResponse({ data: [], error: err.message }));
+        return true;
+      }
+    });
+  }
 })();
