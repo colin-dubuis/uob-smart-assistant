@@ -252,6 +252,32 @@ body:not(.dark-mode) .btn-primary:hover {
   border-color: #f87171;
 }
 
+.settings-action-row {
+  margin-top: 4px;
+}
+
+.btn-danger-full {
+  width: 100%;
+  background: transparent;
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.btn-danger-full:hover {
+  background: rgba(248, 113, 113, 0.15);
+  border-color: #f87171;
+  color: #ffffff;
+}
+
 /* ── Status Message Banner ── */
 .status-message {
   padding: 8px 12px;

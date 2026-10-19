@@ -76,15 +76,26 @@
         <input type="text" id="customSiteLabelInput" placeholder="Label" autocomplete="off">
         <button id="addCustomSiteBtn" class="btn-add">ADD SITE</button>
       </div>
+      <div class="gradient-line subtle"></div>
+
+      <div class="settings-sub">
+        <span class="settings-section-tag">03 / DATA MANAGEMENT</span>
+        <p class="settings-desc">
+          Purge all locally stored crawl data to inspect what is newly crawled.
+        </p>
+      </div>
+
+      <div class="settings-action-row">
+        <button id="btnClear" class="btn-danger-full" title="Purge stored data to perform a fresh crawl">
+          🗑 DELETE ALL STORED DATA
+        </button>
+      </div>
     </section>
 
-    <!-- Primary Action Bar (Only Sync and Clear Data; Demo and Export removed) -->
+    <!-- Primary Action Bar -->
     <div class="action-bar">
       <button id="btnSync" class="btn-primary">
         <span class="btn-symbol">⚡</span> SYNC &amp; ANALYZE ALL PORTALS
-      </button>
-      <button id="btnClear" class="btn-secondary btn-danger" title="Purge stored data to perform a fresh crawl">
-        CLEAR DATA
       </button>
     </div>
 
